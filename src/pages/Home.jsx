@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import SEO from "../components/SEO";
 import { getAllItems, syncFromCloud } from "../lib/db";
+import PatientHome from "./PatientHome";
 
 // Greeting based on time of day
 const getGreeting = () => {
@@ -108,7 +109,7 @@ export default function Home() {
     if (isDocLogged === "true") {
       setIsAuthenticated(true);
     } else {
-      navigate("/login");
+      setIsAuthenticated(false);
     }
     setIsLoading(false);
   }, [navigate]);
@@ -237,7 +238,9 @@ export default function Home() {
     );
   }
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated) {
+    return <PatientHome />;
+  }
 
   const statusBadge = (status) => {
     const styles = {

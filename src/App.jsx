@@ -5,7 +5,6 @@ import Footer from "./components/Footer";
 import Home from "./pages/Home";
 import DbmsDashboard from "./pages/DbmsDashboard";
 import Login from "./pages/Login";
-import PatientHome from "./pages/PatientHome";
 
 // Component to scroll to top on route change
 function ScrollToTop() {
@@ -25,7 +24,6 @@ export default function App() {
         <main className="flex-grow">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/patient" element={<PatientHome />} />
             <Route path="/doctor" element={<DbmsDashboard />} />
             <Route path="/login" element={<Login />} />
             <Route path="*" element={<Navigate to="/" replace />} />
