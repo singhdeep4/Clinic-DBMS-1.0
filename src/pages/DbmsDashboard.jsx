@@ -187,6 +187,12 @@ export default function DbmsDashboard() {
   const [notification, setNotification] = useState("");
   const [showSidebar, setShowSidebar] = useState(window.innerWidth >= 1024);
 
+  const closeSidebarOnMobile = () => {
+    if (window.innerWidth < 1024) {
+      setShowSidebar(false);
+    }
+  };
+
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
@@ -878,11 +884,13 @@ export default function DbmsDashboard() {
         setCurrentCase(combined);
         setViewMode("clinical");
         setActiveTab(targetTab);
+        closeSidebarOnMobile();
         triggerNotification(`Loaded record of ${fullRecord.patient.name}`);
       } else {
         setCurrentCase({ ...c });
         setViewMode("clinical");
         setActiveTab(targetTab);
+        closeSidebarOnMobile();
         triggerNotification(`Loaded record of ${c.name}`);
       }
     } catch (err) {
@@ -941,6 +949,7 @@ export default function DbmsDashboard() {
     setCurrentCase({ ...DEFAULT_STATE });
     setViewMode("clinical");
     setActiveTab("profile");
+    closeSidebarOnMobile();
     triggerNotification("Cleared workspace editor.");
   };
 
@@ -1052,6 +1061,7 @@ export default function DbmsDashboard() {
     await putItem("queue", { ...patient, status: "In-Consult" });
     
     setActiveTab("profile");
+    closeSidebarOnMobile();
     triggerNotification(`Consultation initialized for ${patient.name}`);
   };
 
@@ -1736,9 +1746,20 @@ export default function DbmsDashboard() {
         </div>
       )}
 
-      {/* Main Switcher Sidebar */}
+      {/* Backdrop overlay for mobile drawer */}
       {showSidebar && (
-        <div className="w-full lg:w-72 bg-brand-cream border-b lg:border-b-0 lg:border-r border-brand-light/60 flex flex-col shrink-0">
+        <div 
+          className="fixed inset-0 bg-black/45 backdrop-blur-xs z-30 lg:hidden transition-all duration-300"
+          onClick={() => setShowSidebar(false)}
+        />
+      )}
+
+      {/* Main Switcher Sidebar */}
+      <div className={`fixed inset-y-0 left-0 z-40 w-72 bg-brand-cream border-r border-brand-light/60 flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
+        showSidebar 
+          ? "translate-x-0 lg:flex lg:w-72" 
+          : "-translate-x-full lg:hidden lg:w-0"
+      }`}>
         
         {/* Module Switcher Buttons */}
         <div className="p-4 border-b border-brand-light/60 space-y-2">
@@ -1749,7 +1770,7 @@ export default function DbmsDashboard() {
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-1 gap-1.5">
             <button
-              onClick={() => setViewMode("clinical")}
+              onClick={() => { setViewMode("clinical"); closeSidebarOnMobile(); }}
               className={`flex items-center gap-2.5 px-4.5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                 viewMode === "clinical" 
                   ? "bg-brand-primary text-brand-beige shadow-sm" 
@@ -1760,7 +1781,7 @@ export default function DbmsDashboard() {
               <span>Workspace</span>
             </button>
             <button
-              onClick={() => setViewMode("analytics")}
+              onClick={() => { setViewMode("analytics"); closeSidebarOnMobile(); }}
               className={`flex items-center gap-2.5 px-4.5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                 viewMode === "analytics" 
                   ? "bg-brand-primary text-brand-beige shadow-sm" 
@@ -1776,7 +1797,7 @@ export default function DbmsDashboard() {
               )}
             </button>
             <button
-              onClick={() => setViewMode("followups")}
+              onClick={() => { setViewMode("followups"); closeSidebarOnMobile(); }}
               className={`flex items-center gap-2.5 px-4.5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer relative ${
                 viewMode === "followups" 
                   ? "bg-brand-primary text-brand-beige shadow-sm" 
@@ -1792,7 +1813,7 @@ export default function DbmsDashboard() {
               )}
             </button>
             <button
-              onClick={() => setViewMode("utilities")}
+              onClick={() => { setViewMode("utilities"); closeSidebarOnMobile(); }}
               className={`flex items-center gap-2.5 px-4.5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                 viewMode === "utilities" 
                   ? "bg-brand-primary text-brand-beige shadow-sm" 
@@ -1994,7 +2015,6 @@ export default function DbmsDashboard() {
           </button>
         </div>
       </div>
-      )}
 
       {/* Main Workspace Frame */}
       <div className="flex-grow flex flex-col min-h-0 bg-brand-cream/30">
@@ -2050,7 +2070,7 @@ export default function DbmsDashboard() {
               <button
                 key={t.id}
                 onClick={() => setActiveTab(t.id)}
-                className={`px-5 py-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+                className={`px-3.5 py-3 md:px-5 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap cursor-pointer ${
                   activeTab === t.id
                     ? "border-brand-primary text-brand-primary bg-brand-light/10"
                     : "border-transparent text-brand-secondary/80 hover:text-brand-primary"
@@ -2063,7 +2083,7 @@ export default function DbmsDashboard() {
         )}
 
         {/* Dynamic Inner Panel View Router */}
-        <div className="flex-grow overflow-y-auto p-6 md:p-8 max-w-5xl w-full mx-auto">
+        <div className="flex-grow overflow-y-auto p-4 md:p-8 max-w-5xl w-full mx-auto">
           
           {/* ==================== VIEW 1: CLINICAL WORKSPACE ==================== */}
           {viewMode === "clinical" && (
@@ -2108,7 +2128,7 @@ export default function DbmsDashboard() {
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-xs font-bold text-brand-primary uppercase tracking-wider mb-2">
                             Date of Birth {!currentCase.patientId && <span className="text-red-500 font-bold">*</span>}
@@ -3031,7 +3051,7 @@ export default function DbmsDashboard() {
                           </div>
 
                           {/* 3. Frequency */}
-                          <div className="md:col-span-1.5">
+                          <div className="md:col-span-1">
                             <label className="block text-[9px] uppercase tracking-wider font-bold text-brand-secondary mb-1">Frequency</label>
                             <select
                               value={med.frequency || ""}
@@ -3070,7 +3090,7 @@ export default function DbmsDashboard() {
                           </div>
 
                           {/* 5. Anupana */}
-                          <div className="md:col-span-1.5">
+                          <div className="md:col-span-2">
                             <label className="block text-[9px] uppercase tracking-wider font-bold text-brand-secondary mb-1">Anupana</label>
                             <input
                               type="text"
@@ -3096,7 +3116,7 @@ export default function DbmsDashboard() {
                           </div>
 
                           {/* 6. Duration */}
-                          <div className="md:col-span-1.5">
+                          <div className="md:col-span-1">
                             <label className="block text-[9px] uppercase tracking-wider font-bold text-brand-secondary mb-1">Duration</label>
                             <input
                               type="text"
@@ -3120,7 +3140,7 @@ export default function DbmsDashboard() {
                           </div>
 
                           {/* Delete Button */}
-                          <div className="md:col-span-0.5 justify-self-center pt-3 md:pt-0">
+                          <div className="md:col-span-1 justify-self-center pt-3 md:pt-0">
                             <button
                               onClick={() => removeMedicine(index)}
                               disabled={currentCase.medicines.length === 1}
