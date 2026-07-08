@@ -232,15 +232,19 @@ export default function DbmsDashboard() {
   // Load cases, queue, and start realtime listeners once on mount
   useEffect(() => {
     if (!isAuthenticated) return;
+    console.log("[Dashboard] Mount: Starting data load & realtime listeners");
 
     let unsubscribeRealtime = null;
 
     async function refreshAll() {
+      console.log("[Dashboard] Refreshing all data from Firestore...");
       try {
         await syncFromCloud();
 
         const patientsList = await getAllItems("patients");
         const visits = await getAllItems("visits");
+        console.log(`[Dashboard] Loaded ${patientsList.length} patients, ${visits.length} visits`);
+        
         const patientVisitsMap = {};
 
         visits.forEach(v => {
@@ -259,11 +263,12 @@ export default function DbmsDashboard() {
         setSavedCases(combinedPatients);
 
         const queue = await getAllItems("queue");
+        console.log(`[Dashboard] Loaded ${queue.length} queue items`);
         setLiveQueue(queue || []);
         const archivesList = await getAllItems("archived_records");
         setArchivedRecords(archivesList || []);
       } catch (err) {
-        console.error("Error refreshing data:", err);
+        console.error("[Dashboard] Error refreshing data:", err);
       }
     }
 
@@ -272,10 +277,12 @@ export default function DbmsDashboard() {
 
     // start realtime listeners which call refreshAll on any collection change
     unsubscribeRealtime = startRealtimeListeners((storeName) => {
+      console.log(`[Dashboard] Realtime event: ${storeName} changed, refreshing...`);
       try { refreshAll(); } catch (e) { console.error(e); }
     });
 
     return () => {
+      console.log("[Dashboard] Cleanup: Unsubscribing realtime listeners");
       try { unsubscribeRealtime && unsubscribeRealtime(); } catch (e) {}
     };
   }, [isAuthenticated]);
@@ -942,8 +949,13 @@ export default function DbmsDashboard() {
     e.stopPropagation();
     if (window.confirm("Are you sure you want to delete this patient record and all their visits?")) {
       try {
-        await deleteItem("patients", id);
-        
+        const res = await deleteItem("patients", id);
+        if (!res || !res.deleted) {
+          console.error("Delete patient record failed: server delete not confirmed", res);
+          triggerNotification("Failed to delete patient record on server.");
+          return;
+        }
+
         // Also delete visits belonging to this patient
         try {
           const { collection, getDocs, query, where } = await import("firebase/firestore");
@@ -955,7 +967,7 @@ export default function DbmsDashboard() {
         } catch (err) {
           console.warn("Failed to delete patient visits from Firestore:", err);
         }
-        
+
         const filtered = savedCases.filter(c => c.patientId !== id);
         setSavedCases(filtered);
         if (currentCase.patientId === id) {
