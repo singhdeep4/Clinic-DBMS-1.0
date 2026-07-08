@@ -1025,6 +1025,7 @@ export default function DbmsDashboard() {
         age: patient.age,
         gender: patient.gender || "Male",
         mobile: patient.mobile,
+        dateOfBirth: patient.dateOfBirth || "",
         occupation: patient.occupation || "",
         complaints: [{ text: patient.reason || "", onsetDate: new Date().toISOString().split("T")[0] }]
       });
