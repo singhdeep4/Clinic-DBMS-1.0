@@ -68,7 +68,8 @@ export default function Login() {
       })
       .catch((error) => {
         console.error("Firebase sign in error:", error);
-        setErrorMsg("Invalid doctor email or password credentials.");
+        // Show the real Firebase error message in the UI for debugging
+        setErrorMsg(error?.message || "Invalid doctor email or password credentials.");
       });
   };
 
@@ -89,7 +90,7 @@ export default function Login() {
       })
       .catch((error) => {
         console.error("Firebase password reset error:", error);
-        setErrorMsg("Failed to send password reset email. Ensure the email is registered.");
+        setErrorMsg(error?.message || "Failed to send password reset email. Ensure the email is registered.");
       });
   };
 
