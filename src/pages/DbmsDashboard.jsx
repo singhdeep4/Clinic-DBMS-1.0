@@ -761,6 +761,7 @@ export default function DbmsDashboard() {
       setSavedCases(newSavedCases);
 
       triggerNotification(`Case Record Saved (ID: ${patientId}).`);
+      await autoCheckoutQueuePatient(patientId, updatedCase.name, updatedCase.mobile, updatedCase.dateOfBirth);
     } catch (err) {
       console.error("Save case failed:", err);
       triggerNotification("Failed to save case record.");
@@ -841,6 +842,7 @@ export default function DbmsDashboard() {
 
       triggerNotification("Current session archived to history. Started follow-up visit.");
       setActiveTab("complaints");
+      await autoCheckoutQueuePatient(currentCase.patientId, currentCase.name, currentCase.mobile, currentCase.dateOfBirth);
     } catch (err) {
       console.error("Error creating follow-up visit:", err);
       triggerNotification("Failed to record follow-up visit.");
@@ -1093,6 +1095,28 @@ export default function DbmsDashboard() {
     setLiveQueue(updatedQueue);
     await deleteItem("queue", id);
     triggerNotification("Patient checked out from waiting list.");
+  };
+
+  const autoCheckoutQueuePatient = async (patientId, patientName, patientMobile, patientDOB) => {
+    try {
+      const cleanMobileStr = (patientMobile || "").replace(/[^0-9]/g, "");
+      const matchingQueueItem = liveQueue.find(q => {
+        if (q.patientId && q.patientId === patientId) return true;
+        const qMobile = (q.mobile || "").replace(/[^0-9]/g, "");
+        if (qMobile && qMobile === cleanMobileStr) {
+          const dob = q.dateOfBirth || q.dob;
+          if (dob && dob === patientDOB) return true;
+          if (q.name.toLowerCase().trim() === patientName.toLowerCase().trim()) return true;
+        }
+        if (q.name && q.name.toLowerCase().trim() === (patientName || "").toLowerCase().trim()) return true;
+        return false;
+      });
+      if (matchingQueueItem) {
+        await completeQueuePatient(matchingQueueItem.id);
+      }
+    } catch (err) {
+      console.warn("Failed to auto-checkout queue patient:", err);
+    }
   };
 
   // Add patient to queue
