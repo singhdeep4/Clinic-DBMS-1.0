@@ -44,19 +44,19 @@ const getDurationString = (dateStr) => {
 
 const normalizeComplaints = (complaintsArray) => {
   if (!Array.isArray(complaintsArray) || complaintsArray.length === 0) {
-    return [{ text: "", onsetDate: "" }];
+    return [{ text: "", onsetDate: new Date().toISOString().split("T")[0] }];
   }
   return complaintsArray.map(c => {
-    if (typeof c === "string") {
-      return { text: c, onsetDate: "" };
-    }
-    if (c && typeof c === "object") {
-      return {
-        text: c.text || "",
-        onsetDate: c.onsetDate || ""
-      };
-    }
-    return { text: "", onsetDate: "" };
+      if (typeof c === "string") {
+        return { text: c, onsetDate: new Date().toISOString().split("T")[0] };
+      }
+      if (c && typeof c === "object") {
+        return {
+          text: c.text || "",
+          onsetDate: c.onsetDate || new Date().toISOString().split("T")[0]
+        };
+      }
+      return { text: "", onsetDate: new Date().toISOString().split("T")[0] };
   });
 };
 
@@ -112,7 +112,7 @@ const DEFAULT_STATE = {
   occupation: "",
   
   // Chief Complaints (Multiple items)
-  complaints: [{ text: "", onsetDate: "" }],
+  complaints: [{ text: "", onsetDate: new Date().toISOString().split("T")[0] }],
   
   // Ayurvedic Core (Appetite, bowel, sleep)
   kshudha: "Sama",
@@ -452,7 +452,7 @@ export default function DbmsDashboard() {
 
   // Complaint wizard handlers
   const addComplaint = () => {
-    const updated = [...currentCase.complaints, { text: "", onsetDate: "" }];
+    const updated = [...currentCase.complaints, { text: "", onsetDate: new Date().toISOString().split("T")[0] }];
     setCurrentCase({ ...currentCase, complaints: updated });
   };
 
@@ -2632,12 +2632,9 @@ export default function DbmsDashboard() {
                           </div>
                           <div className="w-52">
                             <label className="block text-[9px] uppercase tracking-wider text-brand-secondary font-bold mb-1">Onset Date</label>
-                            <input
-                              type="date"
-                              value={c.onsetDate || ""}
-                              onChange={(e) => updateComplaint(index, "onsetDate", e.target.value)}
-                              className="w-full bg-brand-beige border border-brand-light/50 px-3 py-2.5 rounded-lg text-xs focus:outline-none"
-                            />
+                            <div className="w-full bg-brand-beige/60 border border-brand-light/40 px-3 py-2.5 rounded-lg text-xs text-brand-dark/70 font-medium">
+                              {c.onsetDate || new Date().toISOString().split("T")[0]}
+                            </div>
                             {c.onsetDate && (
                               <span className="text-[10px] text-brand-secondary font-medium mt-1 block">
                                 Duration: {getDurationString(c.onsetDate)}
