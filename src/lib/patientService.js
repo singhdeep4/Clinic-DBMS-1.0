@@ -65,16 +65,28 @@ export async function getPatientVisits(patientId) {
 export async function getNextPatientId() {
   try {
     const patients = await getAllItems("patients");
-    const ids = new Set(patients.map(p => p.patientId));
+    // Build a set of existing numeric sequence values (integers) for PAT- ids
+    const nums = new Set();
     let maxNum = 0;
-    for (const id of ids) {
+    for (const p of patients) {
+      const id = p.patientId;
       if (id && id.startsWith("PAT-")) {
         const num = parseInt(id.replace("PAT-", ""), 10);
-        if (!isNaN(num) && num > maxNum) {
-          maxNum = num;
+        if (!isNaN(num) && num > 0) {
+          nums.add(num);
+          if (num > maxNum) maxNum = num;
         }
       }
     }
+
+    // Find smallest missing positive integer starting from 1
+    for (let i = 1; i <= maxNum; i++) {
+      if (!nums.has(i)) {
+        return `PAT-${String(i).padStart(8, "0")}`;
+      }
+    }
+
+    // If none missing, use next after max
     return `PAT-${String(maxNum + 1).padStart(8, "0")}`;
   } catch (err) {
     console.error("Error generating sequential patient ID:", err);
