@@ -588,6 +588,20 @@ export default function DbmsDashboard() {
       };
       await putItem("patients", patientData);
 
+      const registryData = {
+        patientId,
+        name: currentCase.name,
+        dateOfBirth: currentCase.dateOfBirth || "",
+        gender: currentCase.gender,
+        mobile: cleanMobile,
+        occupation: currentCase.occupation,
+        address: currentCase.address || "",
+        email: currentCase.email || "",
+        status: currentCase.status || "Active",
+        updatedAt: new Date().toISOString()
+      };
+      await putItem("registry", registryData);
+
       // Check if there is an existing case in savedCases, and update it
       const existingIndex = savedCases.findIndex(c => c.patientId === patientId);
       if (existingIndex !== -1) {
