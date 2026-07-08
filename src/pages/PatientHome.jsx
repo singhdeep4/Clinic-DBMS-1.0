@@ -52,17 +52,24 @@ export default function PatientHome() {
     }
 
     setStatus("Booking...");
-    const payload = {
+    // Build queue item matching doctor's portal schema
+    const newItem = {
+      id: "Q-" + Date.now(),
+      name: name.trim(),
+      age: "",
+      gender: "",
+      mobile: "",
+      reason: `Walk-in - ${clinic.name}`,
+      status: "Waiting",
+      timestamp: new Date().toISOString(),
+      preferredTime: time || "Walk-in",
       clinicId: clinic.id,
       clinicName: clinic.name,
-      name: name.trim(),
-      time,
-      source: "patient_home",
-      createdAt: new Date().toISOString()
+      source: "patient_home"
     };
 
     try {
-      await putItem("queue", payload);
+      await putItem("queue", newItem);
       setStatus("Booked — you are added to the walk-in list.");
       setName("");
       setTime("");
