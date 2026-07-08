@@ -1,3 +1,4 @@
+import { startRealtimeListeners } from "../lib/realtime.js";
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -228,61 +229,55 @@ export default function DbmsDashboard() {
     }
   }, [isAuthenticated]);
 
-  // Load cases, queue, and migrate from LocalStorage once on mount
+  // Load cases, queue, and start realtime listeners once on mount
   useEffect(() => {
     if (!isAuthenticated) return;
-    
-    async function loadData() {
-      // Cloud-only mode: fetch latest from Firestore
-      await syncFromCloud();
-      
-      // 2. Fetch Patients & Visits to compile savedCases sidebar
-      //    Merge latest visit clinical data so analytics/alerts can access labTests, complaints, etc.
+
+    let unsubscribeRealtime = null;
+
+    async function refreshAll() {
       try {
+        await syncFromCloud();
+
         const patientsList = await getAllItems("patients");
         const visits = await getAllItems("visits");
         const patientVisitsMap = {};
-        
+
         visits.forEach(v => {
           if (!patientVisitsMap[v.patientId] || new Date(v.visitDate) > new Date(patientVisitsMap[v.patientId].visitDate)) {
             patientVisitsMap[v.patientId] = v;
           }
         });
-        
         const combinedPatients = patientsList.map(p => {
           const latestVisit = patientVisitsMap[p.patientId];
-          if (latestVisit) {
-            return {
-              ...p,
-              visitDate: latestVisit.visitDate,
-              // Merge clinical fields from the latest visit for analytics & alerts
-              complaints: latestVisit.chiefComplaints || latestVisit.complaints || [],
-              labTests: latestVisit.labTests || [],
-              outcomeScore: latestVisit.outcomeScore || "No Improvement",
-              prakriti: latestVisit.prakriti || p.prakriti || "Vata-Pitta",
-              agni: latestVisit.agni || "Sama",
-              mala: latestVisit.mala || "Regular",
-              medicines: latestVisit.medicines || [],
-              nextFollowUp: latestVisit.nextFollowUp || "15 Days"
-            };
-          }
           return {
             ...p,
-            visitDate: p.createdAt || p.updatedAt
+            visitDate: latestVisit ? latestVisit.visitDate : p.createdAt || p.updatedAt
           };
         });
-        
         combinedPatients.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
         setSavedCases(combinedPatients);
-      } catch (err) {
-        console.error("Error loading patient records:", err);
-      }
 
-      // 3. Fetch Live Queue
-      const queue = await getAllItems("queue");
-      setLiveQueue(queue);
+        const queue = await getAllItems("queue");
+        setLiveQueue(queue || []);
+        const archivesList = await getAllItems("archived_records");
+        setArchivedRecords(archivesList || []);
+      } catch (err) {
+        console.error("Error refreshing data:", err);
+      }
     }
-    loadData();
+
+    // initial fetch
+    refreshAll();
+
+    // start realtime listeners which call refreshAll on any collection change
+    unsubscribeRealtime = startRealtimeListeners((storeName) => {
+      try { refreshAll(); } catch (e) { console.error(e); }
+    });
+
+    return () => {
+      try { unsubscribeRealtime && unsubscribeRealtime(); } catch (e) {}
+    };
   }, [isAuthenticated]);
 
   // Auto-refresh queue every 15 seconds so new bookings appear in real time
