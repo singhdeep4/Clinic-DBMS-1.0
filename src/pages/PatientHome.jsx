@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { putItem } from "../lib/db.js";
 import { findDuplicatePatient } from "../lib/patientService.js";
 import { motion, AnimatePresence } from "framer-motion";
@@ -54,6 +54,19 @@ export default function PatientHome() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState("");
   const [verifiedPatient, setVerifiedPatient] = useState(null);
+
+  // Contact popup state and helpers
+  const [activeNumberMenu, setActiveNumberMenu] = useState(null);
+  const cleanTel = (num) => num.replace(/[^0-9+]/g, "");
+  const cleanWA = (num) => num.replace(/[^0-9]/g, "");
+
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setActiveNumberMenu(null);
+    };
+    window.addEventListener("click", handleGlobalClick);
+    return () => window.removeEventListener("click", handleGlobalClick);
+  }, []);
 
   const openForm = (clinicId) => {
     setOpenClinic(clinicId);
@@ -251,9 +264,67 @@ export default function PatientHome() {
                       <Clock className="w-4 h-4 text-brand-accent shrink-0" />
                       <span>7:00 PM – 9:00 PM IST</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <PhoneCall className="w-4 h-4 text-brand-accent shrink-0" />
-                      <span className="hover:text-brand-primary transition-colors">{c.contact}</span>
+                    <div className="flex items-start gap-2 relative">
+                      <PhoneCall className="w-4 h-4 text-brand-accent shrink-0 mt-0.5" />
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm">
+                        {c.contact.split("|").map((num, idx, arr) => {
+                          const trimmedNum = num.trim();
+                          const isMenuOpen = activeNumberMenu === trimmedNum;
+                          return (
+                            <React.Fragment key={trimmedNum}>
+                              <div className="relative inline-block">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveNumberMenu(isMenuOpen ? null : trimmedNum);
+                                  }}
+                                  className="hover:text-brand-primary font-semibold underline decoration-dotted transition-colors cursor-pointer text-left text-[13px] md:text-sm"
+                                >
+                                  {trimmedNum}
+                                </button>
+                                
+                                <AnimatePresence>
+                                  {isMenuOpen && (
+                                    <motion.div
+                                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                      transition={{ duration: 0.15 }}
+                                      className="absolute left-0 mt-2 w-48 bg-white border border-brand-primary/10 rounded-xl shadow-xl py-2 z-50 overflow-hidden text-brand-dark"
+                                    >
+                                      <div className="px-3 py-1 text-[9px] uppercase font-bold text-brand-secondary border-b border-brand-light/20 bg-brand-cream/35">
+                                        Choose Option
+                                      </div>
+                                      <a
+                                        href={`tel:${cleanTel(trimmedNum)}`}
+                                        onClick={() => setActiveNumberMenu(null)}
+                                        className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold hover:bg-brand-light transition-colors text-brand-primary"
+                                      >
+                                        <Phone className="w-3.5 h-3.5 text-brand-accent shrink-0" />
+                                        <span>Normal Phone Call</span>
+                                      </a>
+                                      <a
+                                        href={`https://wa.me/${cleanWA(trimmedNum)}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        onClick={() => setActiveNumberMenu(null)}
+                                        className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold hover:bg-brand-light transition-colors text-emerald-700"
+                                      >
+                                        <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24">
+                                          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.725 1.45 5.489 0 9.952-4.466 9.955-9.956.002-2.661-1.033-5.163-2.909-7.04C16.545 1.732 14.047.697 11.385.697c-5.495 0-9.96 4.46-9.963 9.95-.001 1.637.43 3.238 1.248 4.647L1.64 21.397l6.236-1.637.77.44c1 .58 2 .87 3.3.87zM17.487 14.39c-.3-.15-1.774-.875-2.046-.975-.273-.1-.472-.15-.672.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-.3-.15-1.265-.467-2.41-1.485-.89-.795-1.49-1.77-1.665-2.07-.175-.3-.02-.463.13-.613.135-.135.3-.35.45-.525.15-.175.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.672-1.62-.92-2.22-.24-.58-.487-.5-.672-.51-.175-.007-.375-.01-.575-.01-.2 0-.525.075-.8.375-.275.3-1.05 1.025-1.05 2.5s1.075 2.9 1.225 3.1c.15.2 2.11 3.224 5.112 4.52.714.308 1.272.493 1.707.63.714.227 1.365.195 1.88.118.574-.085 1.774-.725 2.023-1.425.249-.7.249-1.3.175-1.425-.075-.125-.275-.2-.575-.35z" />
+                                        </svg>
+                                        <span>WhatsApp Chat</span>
+                                      </a>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                              {idx < arr.length - 1 && <span className="text-brand-secondary/30 select-none">|</span>}
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
