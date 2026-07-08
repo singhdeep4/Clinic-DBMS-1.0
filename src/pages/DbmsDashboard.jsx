@@ -42,6 +42,24 @@ const getDurationString = (dateStr) => {
   return `${diffYears} year${diffYears > 1 ? "s" : ""} and ${remainingMonths} month${remainingMonths > 1 ? "s" : ""} ago`;
 };
 
+const normalizeComplaints = (complaintsArray) => {
+  if (!Array.isArray(complaintsArray) || complaintsArray.length === 0) {
+    return [{ text: "", onsetDate: "" }];
+  }
+  return complaintsArray.map(c => {
+    if (typeof c === "string") {
+      return { text: c, onsetDate: "" };
+    }
+    if (c && typeof c === "object") {
+      return {
+        text: c.text || "",
+        onsetDate: c.onsetDate || ""
+      };
+    }
+    return { text: "", onsetDate: "" };
+  });
+};
+
 // Ayurvedic presets for rapid entry
 const MEDICINE_PRESETS = [
   "Triphala Churna", "Chandraprabha Vati", "Gandharvahastadi Kashayam", 
@@ -732,7 +750,7 @@ export default function DbmsDashboard() {
       const fullActive = {
         ...patientData,
         ...visitData,
-        complaints: visitData.chiefComplaints || updatedCase.complaints || [],
+        complaints: normalizeComplaints(visitData.chiefComplaints || updatedCase.complaints),
         visits: allVisits.filter(v => v.visitId !== visitId) // separate history
       };
       setCurrentCase(fullActive);
@@ -898,7 +916,7 @@ export default function DbmsDashboard() {
         const combined = {
           ...fullRecord.patient,
           ...activeVisit,
-          complaints: activeVisit.chiefComplaints || activeVisit.complaints || [],
+          complaints: normalizeComplaints(activeVisit.chiefComplaints || activeVisit.complaints),
           visits: fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
         };
         setCurrentCase(combined);
@@ -930,7 +948,7 @@ export default function DbmsDashboard() {
         setCurrentCase({
           ...fullRecord.patient,
           ...activeVisit,
-          complaints: activeVisit.chiefComplaints || activeVisit.complaints || [],
+          complaints: normalizeComplaints(activeVisit.chiefComplaints || activeVisit.complaints),
           visits: fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
         });
         triggerNotification(`Loaded patient record for ${patient.name}.`);
@@ -1718,18 +1736,20 @@ export default function DbmsDashboard() {
               Chief Complaints
             </h4>
             <ul className="list-disc pl-5 text-xs text-gray-800 space-y-1">
-              {currentCase.complaints.map((c, i) => (
-                c.text.trim() && (
+              {currentCase.complaints.map((c, i) => {
+                const text = typeof c === "string" ? c : (c && c.text ? c.text : "");
+                const onsetDate = typeof c === "string" ? "" : (c && c.onsetDate ? c.onsetDate : "");
+                return text.trim() && (
                   <li key={i}>
-                    <span className="font-semibold text-gray-900">{c.text}</span>
-                    {c.onsetDate ? (
-                      <span> — Onset: <span className="italic">{c.onsetDate} ({getDurationString(c.onsetDate)})</span></span>
+                    <span className="font-semibold text-gray-900">{text}</span>
+                    {onsetDate ? (
+                      <span> — Onset: <span className="italic">{onsetDate} ({getDurationString(onsetDate)})</span></span>
                     ) : (
                       <span> — Onset: <span className="italic">N/A</span></span>
                     )}
                   </li>
-                )
-              ))}
+                );
+              })}
             </ul>
           </div>
 
