@@ -331,7 +331,7 @@ export default function PatientHome() {
 
                 <div className="w-full md:w-auto shrink-0 pt-4 md:pt-0">
                   <button 
-                    onClick={() => openForm(c.id)}
+                    onClick={() => openForm(openClinic === c.id ? null : c.id)}
                     className="w-full md:w-auto bg-brand-primary text-brand-beige hover:bg-brand-secondary active:scale-[0.98] px-6 py-3.5 rounded-xl font-semibold shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer text-center"
                   >
                     {openClinic === c.id ? "Close Form" : "Book Appointment"}
