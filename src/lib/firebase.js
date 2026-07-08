@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 
 // Ayurkaya-DBMS Firebase Web Configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCwrPolAxApLT5VMH_jz2UKciCBh1pQ6cg",
+  apiKey: "AIzaSyCwRpolAxApLT5VMH_jz2UKciCBh1pQ6cg",
   authDomain: "ayurkaya-dbms.firebaseapp.com",
   projectId: "ayurkaya-dbms",
   storageBucket: "ayurkaya-dbms.firebasestorage.app",
