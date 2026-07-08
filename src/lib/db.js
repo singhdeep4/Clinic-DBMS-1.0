@@ -86,22 +86,101 @@ export async function getAllItems(storeName) {
 
 export async function putItem(storeName, item) {
   const db = await initDB();
-  return new Promise((resolve, reject) => {
+  
+  // Write to IndexedDB first
+  const result = await new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, "readwrite");
     const store = transaction.objectStore(storeName);
     const request = store.put(item);
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+
+  // Mirror to Firebase Firestore in the background
+  try {
+    const { doc, setDoc } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+    
+    let docId = null;
+    if (storeName === "patients") docId = item.patientId;
+    else if (storeName === "visits") docId = item.visitId;
+    else if (storeName === "queue") docId = String(item.id);
+    else if (storeName === "archived_records") docId = String(item.archiveId || item.id || Date.now());
+
+    if (docId) {
+      // Don't await setDoc to keep user interface lightning fast and responsive
+      setDoc(doc(fdb, storeName, docId), JSON.parse(JSON.stringify(item)))
+        .catch(err => console.error("Firestore sync error in background:", err));
+    }
+  } catch (err) {
+    console.error("Firebase mirror write skipped:", err);
+  }
+
+  return result;
 }
 
 export async function deleteItem(storeName, key) {
   const db = await initDB();
-  return new Promise((resolve, reject) => {
+  
+  // Delete locally first
+  await new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, "readwrite");
     const store = transaction.objectStore(storeName);
     const request = store.delete(key);
     request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+
+  // Mirror delete to Firebase in the background
+  try {
+    const { doc, deleteDoc } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+    
+    const docId = String(key);
+    deleteDoc(doc(fdb, storeName, docId))
+      .catch(err => console.error("Firestore delete error in background:", err));
+  } catch (err) {
+    console.error("Firebase mirror delete skipped:", err);
+  }
+}
+
+// Synchronizes data from Firebase Firestore to local IndexedDB on dashboard initial load
+export async function syncFromCloud() {
+  try {
+    console.log("Synchronizing workspace data from cloud (Firestore) to local IndexedDB...");
+    const { collection, getDocs } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+    
+    const collectionsToSync = ["patients", "visits", "queue", "archived_records"];
+    
+    for (const storeName of collectionsToSync) {
+      const querySnapshot = await getDocs(collection(fdb, storeName));
+      if (!querySnapshot.empty) {
+        console.log(`Syncing ${querySnapshot.size} items from cloud store: ${storeName}`);
+        
+        // Write each document to local IndexedDB
+        for (const docSnap of querySnapshot.docs) {
+          const item = docSnap.data();
+          await putLocalOnly(storeName, item);
+        }
+      }
+    }
+    console.log("Cloud synchronization completed successfully.");
+    return true;
+  } catch (err) {
+    console.error("Cloud synchronization failed:", err);
+    return false;
+  }
+}
+
+// Helper to write to local IndexedDB only (avoiding infinite sync loops)
+async function putLocalOnly(storeName, item) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, "readwrite");
+    const store = transaction.objectStore(storeName);
+    const request = store.put(item);
+    request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
 }

@@ -7,7 +7,7 @@ import {
   ClipboardList, TrendingUp, AlertCircle, CheckCircle2
 } from "lucide-react";
 import SEO from "../components/SEO";
-import { getAllItems, initDB } from "../lib/db";
+import { getAllItems, initDB, syncFromCloud } from "../lib/db";
 
 // Greeting based on time of day
 const getGreeting = () => {
@@ -125,6 +125,8 @@ export default function Home() {
 
     async function loadDashboardData() {
       try {
+        // Sync latest records from Firebase cloud database
+        await syncFromCloud();
         // Load patients
         const patients = await getAllItems("patients");
         setTotalPatients(patients.length);

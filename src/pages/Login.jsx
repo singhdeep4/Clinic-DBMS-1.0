@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, ShieldAlert, CheckCircle, MailCheck, AlertCircle } from "lucide-react";
 import SEO from "../components/SEO";
+import { auth } from "../lib/firebase";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -55,19 +57,19 @@ export default function Login() {
       return;
     }
 
-    const docAccount = JSON.parse(localStorage.getItem("ayurkaya_doctor_account") || "{}");
-    const storedEmail = docAccount.email || "drneha@ayurkaya.com";
-    const storedPassword = docAccount.password || "DrNehaAyurkaya1@";
-
-    if (email.toLowerCase() === storedEmail.toLowerCase() && password === storedPassword) {
-      localStorage.setItem("ayurkaya_doctor_logged_in", "true");
-      setSuccessMsg("Doctor authenticated successfully!");
-      setTimeout(() => {
-        navigate("/doctor");
-      }, 1000);
-    } else {
-      setErrorMsg("Invalid doctor email or password credentials.");
-    }
+    // Authenticate using Firebase Auth
+    signInWithEmailAndPassword(auth, email, password)
+      .then((userCredential) => {
+        localStorage.setItem("ayurkaya_doctor_logged_in", "true");
+        setSuccessMsg("Doctor authenticated successfully!");
+        setTimeout(() => {
+          navigate("/doctor");
+        }, 1000);
+      })
+      .catch((error) => {
+        console.error("Firebase sign in error:", error);
+        setErrorMsg("Invalid doctor email or password credentials.");
+      });
   };
 
   const handleForgotSubmit = (e) => {
@@ -80,25 +82,15 @@ export default function Login() {
       return;
     }
 
-    const docAccount = JSON.parse(localStorage.getItem("ayurkaya_doctor_account") || "{}");
-    const storedEmail = docAccount.email || "drneha@ayurkaya.com";
-
-    if (email.toLowerCase() !== storedEmail.toLowerCase()) {
-      setErrorMsg("No doctor account registered under that email address.");
-      return;
-    }
-
-    // Code is always 1008 or a randomized one
-    const code = docAccount.passcode || "1008";
-    setSentCode(code);
-    setForgotStep(2);
-
-    setMockEmailInbox({
-      to: email,
-      subject: "Ayurkaya Doctor Portal Recovery",
-      body: `Hello Dr. Neha,\n\nYour portal passcode verification code is ${code}.\nYour current doctor login password is: "${docAccount.password || "DrNehaAyurkaya1@"}"`
-    });
-    setSuccessMsg("Verification code sent to your doctor email! Check the Mock Email Inbox popup.");
+    // Send password reset email directly via Firebase Auth
+    sendPasswordResetEmail(auth, email)
+      .then(() => {
+        setSuccessMsg("Password reset email sent! Check your inbox (and spam folder) for the reset link.");
+      })
+      .catch((error) => {
+        console.error("Firebase password reset error:", error);
+        setErrorMsg("Failed to send password reset email. Ensure the email is registered.");
+      });
   };
 
   const handleVerifyCode = (e) => {

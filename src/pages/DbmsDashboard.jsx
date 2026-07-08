@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import SEO from "../components/SEO";
 import { 
-  getAllItems, putItem, deleteItem, clearStore, migrateFromLocalStorage, initDB, migrateToV5
+  getAllItems, putItem, deleteItem, clearStore, migrateFromLocalStorage, initDB, migrateToV5, syncFromCloud
 } from "../lib/db";
 
 // Helper to calculate duration from onset date
@@ -236,6 +236,8 @@ export default function DbmsDashboard() {
       // 1. One-time auto migration from LocalStorage to IndexedDB
       await migrateFromLocalStorage();
       await migrateToV5();
+      // Sync latest patient records from Cloud Firestore database
+      await syncFromCloud();
       
       // 2. Fetch Patients & Visits to compile savedCases sidebar
       //    Merge latest visit clinical data so analytics/alerts can access labTests, complaints, etc.
