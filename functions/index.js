@@ -87,3 +87,82 @@ exports.pruneOldVisits = onSchedule("0 0 1 * *", async (event) => {
 
   return null;
 });
+
+/**
+ * Scheduled Cloud Function (Runs every 2 weeks)
+ * Deletes visit history for patients who haven't visited in 60+ days (no-show patients)
+ * Preserves patient basic info and marked cleanup timestamp
+ */
+exports.cleanupMissedVisits = onSchedule("every 2 weeks", async (event) => {
+  const now = new Date();
+  const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+  const sixtyDaysAgoStr = sixtyDaysAgo.toISOString();
+
+  console.log(`[Cleanup] Starting missed visits cleanup. Checking for patients with no visits since ${sixtyDaysAgoStr}...`);
+
+  try {
+    // 1. Get all patients
+    const patientsSnap = await db.collection("patients").get();
+    console.log(`[Cleanup] Found ${patientsSnap.size} total patients`);
+
+    let deletedVisitsCount = 0;
+    let cleanedPatientsCount = 0;
+
+    for (const patientDoc of patientsSnap.docs) {
+      const patient = patientDoc.data();
+      const patientId = patientDoc.id;
+
+      // Get last visit for this patient
+      const visitsSnap = await db
+        .collection("visits")
+        .where("patientId", "==", patientId)
+        .orderBy("visitDate", "desc")
+        .limit(1)
+        .get();
+
+      if (visitsSnap.empty) {
+        continue;
+      }
+
+      const lastVisit = visitsSnap.docs[0].data();
+      const lastVisitDate = new Date(lastVisit.visitDate);
+
+      // Check if patient missed follow-up (no visit in 60+ days)
+      if (lastVisitDate < sixtyDaysAgo) {
+        console.log(
+          `[Cleanup] Patient ${patientId} (${patient.name || "Unknown"}) - last visit: ${lastVisitDate.toDateString()}, deleting visit history...`
+        );
+
+        // Get all visits for this patient
+        const allVisitsSnap = await db
+          .collection("visits")
+          .where("patientId", "==", patientId)
+          .get();
+
+        // Delete all visits in batch
+        const batch = db.batch();
+        for (const visitDoc of allVisitsSnap.docs) {
+          batch.delete(visitDoc.ref);
+          deletedVisitsCount++;
+        }
+        await batch.commit();
+
+        // Update patient record to mark cleanup
+        await db.collection("patients").doc(patientId).update({
+          lastCleanupDate: admin.firestore.FieldValue.serverTimestamp(),
+          visitHistoryDeleted: true,
+        });
+
+        cleanedPatientsCount++;
+      }
+    }
+
+    console.log(
+      `[Cleanup] Completed: Cleaned ${cleanedPatientsCount} patients, deleted ${deletedVisitsCount} visit records`
+    );
+    return { success: true, cleanedPatients: cleanedPatientsCount, deletedVisits: deletedVisitsCount };
+  } catch (err) {
+    console.error("[Cleanup] Error during missed visits cleanup:", err);
+    throw err;
+  }
+});
