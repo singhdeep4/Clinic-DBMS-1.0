@@ -90,15 +90,15 @@ exports.pruneOldVisits = onSchedule("0 0 1 * *", async (event) => {
 
 /**
  * Scheduled Cloud Function (Runs every 2 weeks)
- * Deletes visit history for patients who haven't visited in 60+ days (no-show patients)
- * Preserves patient basic info and marked cleanup timestamp
+ * Cleans up old visit history for patients who haven't visited in 6+ months (180 days)
+ * Preserves the absolute latest visit per patient + patient basic info
  */
 exports.cleanupMissedVisits = onSchedule("every 2 weeks", async (event) => {
   const now = new Date();
-  const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
-  const sixtyDaysAgoStr = sixtyDaysAgo.toISOString();
+  const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+  const sixMonthsAgoStr = sixMonthsAgo.toISOString();
 
-  console.log(`[Cleanup] Starting missed visits cleanup. Checking for patients with no visits since ${sixtyDaysAgoStr}...`);
+  console.log(`[Cleanup] Starting missed visits cleanup. Checking for patients with no visits since ${sixMonthsAgoStr}...`);
 
   try {
     // 1. Get all patients
@@ -112,25 +112,26 @@ exports.cleanupMissedVisits = onSchedule("every 2 weeks", async (event) => {
       const patient = patientDoc.data();
       const patientId = patientDoc.id;
 
-      // Get last visit for this patient
-      const visitsSnap = await db
+      // Get the absolute latest visit for this patient
+      const latestVisitSnap = await db
         .collection("visits")
         .where("patientId", "==", patientId)
         .orderBy("visitDate", "desc")
         .limit(1)
         .get();
 
-      if (visitsSnap.empty) {
+      if (latestVisitSnap.empty) {
         continue;
       }
 
-      const lastVisit = visitsSnap.docs[0].data();
-      const lastVisitDate = new Date(lastVisit.visitDate);
+      const latestVisit = latestVisitSnap.docs[0].data();
+      const latestVisitId = latestVisitSnap.docs[0].id;
+      const latestVisitDate = new Date(latestVisit.visitDate);
 
-      // Check if patient missed follow-up (no visit in 60+ days)
-      if (lastVisitDate < sixtyDaysAgo) {
+      // Check if patient hasn't visited in 6+ months
+      if (latestVisitDate < sixMonthsAgo) {
         console.log(
-          `[Cleanup] Patient ${patientId} (${patient.name || "Unknown"}) - last visit: ${lastVisitDate.toDateString()}, deleting visit history...`
+          `[Cleanup] Patient ${patientId} (${patient.name || "Unknown"}) - last visit: ${latestVisitDate.toDateString()}, cleaning old visit history...`
         );
 
         // Get all visits for this patient
@@ -139,18 +140,20 @@ exports.cleanupMissedVisits = onSchedule("every 2 weeks", async (event) => {
           .where("patientId", "==", patientId)
           .get();
 
-        // Delete all visits in batch
+        // Delete all visits EXCEPT the latest one
         const batch = db.batch();
         for (const visitDoc of allVisitsSnap.docs) {
-          batch.delete(visitDoc.ref);
-          deletedVisitsCount++;
+          if (visitDoc.id !== latestVisitId) {
+            batch.delete(visitDoc.ref);
+            deletedVisitsCount++;
+          }
         }
         await batch.commit();
 
         // Update patient record to mark cleanup
         await db.collection("patients").doc(patientId).update({
           lastCleanupDate: admin.firestore.FieldValue.serverTimestamp(),
-          visitHistoryDeleted: true,
+          lastVisitKept: latestVisitDate,
         });
 
         cleanedPatientsCount++;
@@ -158,7 +161,7 @@ exports.cleanupMissedVisits = onSchedule("every 2 weeks", async (event) => {
     }
 
     console.log(
-      `[Cleanup] Completed: Cleaned ${cleanedPatientsCount} patients, deleted ${deletedVisitsCount} visit records`
+      `[Cleanup] Completed: Cleaned ${cleanedPatientsCount} patients, deleted ${deletedVisitsCount} old visit records (kept latest visit for each)`
     );
     return { success: true, cleanedPatients: cleanedPatientsCount, deletedVisits: deletedVisitsCount };
   } catch (err) {
