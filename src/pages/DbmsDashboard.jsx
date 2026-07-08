@@ -958,8 +958,9 @@ export default function DbmsDashboard() {
   // Delete Case from database
   const deleteCaseRecord = async (id, e) => {
     e.stopPropagation();
-    if (window.confirm("Are you sure you want to delete this patient record and all their visits?")) {
+    if (window.confirm("Are you sure you want to delete this patient record, their registry card, and all their active/archived visits?")) {
       try {
+        // 1. Delete demographics from patients store
         const res = await deleteItem("patients", id);
         if (!res || !res.deleted) {
           console.error("Delete patient record failed: server delete not confirmed", res);
@@ -967,7 +968,14 @@ export default function DbmsDashboard() {
           return;
         }
 
-        // Also delete visits belonging to this patient
+        // 2. Delete registry card
+        try {
+          await deleteItem("registry", id);
+        } catch (regErr) {
+          console.warn("Failed to delete patient registry profile from Firestore:", regErr);
+        }
+
+        // 3. Delete active and completed visits belonging to this patient
         try {
           const { collection, getDocs, query, where } = await import("firebase/firestore");
           const { db: fdb } = await import("../lib/firebase.js");
@@ -979,12 +987,41 @@ export default function DbmsDashboard() {
           console.warn("Failed to delete patient visits from Firestore:", err);
         }
 
+        // 4. Delete archived records belonging to this patient
+        try {
+          const { collection, getDocs, query, where } = await import("firebase/firestore");
+          const { db: fdb } = await import("../lib/firebase.js");
+          const archivedQuery = query(collection(fdb, "archived_records"), where("patientId", "==", id));
+          const archivedSnapshot = await getDocs(archivedQuery);
+          const deleteArchivedPromises = archivedSnapshot.docs.map((docSnap) => deleteItem("archived_records", docSnap.id));
+          await Promise.all(deleteArchivedPromises);
+        } catch (err) {
+          console.warn("Failed to delete patient archived records from Firestore:", err);
+        }
+
+        // 5. Delete patient queue entries
+        try {
+          const { collection, getDocs, query, where } = await import("firebase/firestore");
+          const { db: fdb } = await import("../lib/firebase.js");
+          const queueQuery = query(collection(fdb, "queue"), where("patientId", "==", id));
+          const queueSnapshot = await getDocs(queueQuery);
+          const deleteQueuePromises = queueSnapshot.docs.map((docSnap) => deleteItem("queue", docSnap.id));
+          await Promise.all(deleteQueuePromises);
+
+          const queueIds = queueSnapshot.docs.map(d => d.id);
+          if (queueIds.length > 0) {
+            setLiveQueue(prev => prev.filter(q => !queueIds.includes(q.id)));
+          }
+        } catch (err) {
+          console.warn("Failed to delete patient from queue:", err);
+        }
+
         const filtered = savedCases.filter(c => c.patientId !== id);
         setSavedCases(filtered);
         if (currentCase.patientId === id) {
           setCurrentCase({ ...DEFAULT_STATE });
         }
-        triggerNotification("Patient record and all associated visits removed.");
+        triggerNotification("Patient record, registry, and all visits removed successfully.");
       } catch (err) {
         console.error("Delete patient record failed:", err);
         triggerNotification("Failed to delete patient record.");
