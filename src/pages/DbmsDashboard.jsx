@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import SEO from "../components/SEO";
 import { 
-  getAllItems, putItem, deleteItem, clearStore, migrateFromLocalStorage, initDB, migrateToV5, syncFromCloud
+  getAllItems, putItem, deleteItem, clearStore, syncFromCloud
 } from "../lib/db";
 
 // Helper to calculate duration from onset date
@@ -233,21 +233,7 @@ export default function DbmsDashboard() {
     if (!isAuthenticated) return;
     
     async function loadData() {
-      // 1. One-time auto migration from LocalStorage to IndexedDB
-      await migrateFromLocalStorage();
-      await migrateToV5();
-      // If local→cloud sync hasn't run yet on this device, run it now
-      try {
-        const alreadySynced = localStorage.getItem("ayurkaya_local_to_cloud_synced") === "true";
-        if (!alreadySynced) {
-          // upload local stores to cloud (this function skips empty stores)
-          await uploadLocalToCloud();
-        }
-      } catch (e) {
-        console.warn("Local→Cloud auto-sync check failed:", e);
-      }
-
-      // Sync latest patient records from Cloud Firestore database
+      // Cloud-only mode: fetch latest from Firestore
       await syncFromCloud();
       
       // 2. Fetch Patients & Visits to compile savedCases sidebar
@@ -327,34 +313,6 @@ export default function DbmsDashboard() {
       loadMetrics();
     }
   }, [viewMode]);
-
-  // Force-upload local IndexedDB stores to Firestore (temporary admin utility)
-  const uploadLocalToCloud = async () => {
-    try {
-      const stores = ["patients", "visits", "queue", "archived_records", "registry", "cases"];
-      const { setDoc, doc } = await import("firebase/firestore");
-      const { db: fdb } = await import("../lib/firebase.js");
-
-      for (const storeName of stores) {
-        const items = await getAllItems(storeName).catch(() => []);
-        if (!items || items.length === 0) continue;
-        console.log(`Uploading ${items.length} items from local store '${storeName}' to Firestore...`);
-        for (const item of items) {
-          // pick a sensible ID field
-          const docId = (item.patientId || item.visitId || item.id || item.archiveId || item.patientId || Date.now()).toString();
-          await setDoc(doc(fdb, storeName, docId), JSON.parse(JSON.stringify(item))).catch(err => {
-            console.error(`Failed to upload item to ${storeName}/${docId}:`, err);
-          });
-        }
-      }
-      // Mark as synced and notify user
-      try { localStorage.setItem("ayurkaya_local_to_cloud_synced", "true"); } catch(e){}
-      alert("Local → Cloud sync completed (check Firestore console).");
-    } catch (err) {
-      console.error("Local→Cloud sync failed:", err);
-      alert("Local→Cloud sync failed: " + (err?.message || err));
-    }
-  };
 
   // Sequential Patient ID Generator
   const generateNextPatientId = async () => {
@@ -652,7 +610,7 @@ export default function DbmsDashboard() {
     }
   };
 
-  // Save Case Sheet to IndexedDB
+  // Save Case Sheet to Firestore
   const saveCase = async () => {
     if (!currentCase.name.trim()) {
       triggerNotification("Patient Name is required to save case.");
@@ -991,19 +949,17 @@ export default function DbmsDashboard() {
       try {
         await deleteItem("patients", id);
         
-        // Also delete visits
-        const db = await initDB();
-        const transaction = db.transaction("visits", "readwrite");
-        const store = transaction.objectStore("visits");
-        const index = store.index("patientId");
-        const request = index.getAllKeys(id);
-        
-        request.onsuccess = async () => {
-          const keys = request.result;
-          for (const key of keys) {
-            await deleteItem("visits", key);
-          }
-        };
+        // Also delete visits belonging to this patient
+        try {
+          const { collection, getDocs, query, where } = await import("firebase/firestore");
+          const { db: fdb } = await import("../lib/firebase.js");
+          const visitsQuery = query(collection(fdb, "visits"), where("patientId", "==", id));
+          const visitsSnapshot = await getDocs(visitsQuery);
+          const deletePromises = visitsSnapshot.docs.map((docSnap) => deleteItem("visits", docSnap.id));
+          await Promise.all(deletePromises);
+        } catch (err) {
+          console.warn("Failed to delete patient visits from Firestore:", err);
+        }
         
         const filtered = savedCases.filter(c => c.patientId !== id);
         setSavedCases(filtered);
@@ -1071,7 +1027,7 @@ export default function DbmsDashboard() {
     const updatedQueue = liveQueue.map(q => q.id === patient.id ? { ...q, status: "In-Consult" } : q);
     setLiveQueue(updatedQueue);
     
-    // Save state in IndexedDB
+    // Save state to Firestore
     await putItem("queue", { ...patient, status: "In-Consult" });
     
     setActiveTab("profile");
@@ -1092,7 +1048,7 @@ export default function DbmsDashboard() {
     updatedQueue.splice(index + 1, 0, patient);
     setLiveQueue(updatedQueue);
     
-    // Rewrite live queue store in IndexedDB
+    // Rewrite live queue state in Firestore
     await clearStore("queue");
     for (const q of updatedQueue) {
       await putItem("queue", q);
@@ -1199,7 +1155,7 @@ export default function DbmsDashboard() {
             }
           }
 
-          // Reload React States from IndexedDB
+          // Reload React state from Firestore
           const loadedCases = await getAllItems("cases");
           loadedCases.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
           setSavedCases(loadedCases);
@@ -1827,16 +1783,6 @@ export default function DbmsDashboard() {
             </button>
           </div>
         </div>
-        <div className="p-3 border-b border-brand-light/60">
-          <button
-            onClick={uploadLocalToCloud}
-            className="w-full bg-emerald-700 text-white text-[12px] font-bold py-2 rounded-lg hover:bg-emerald-600"
-            title="Push local IndexedDB data to Firestore (temporary)"
-          >
-            Sync Local → Cloud
-          </button>
-        </div>
-
         {/* Sidebar Case Sheets list (Only show when in clinical workspace) */}
         {viewMode === "clinical" ? (
           <div className="flex-grow flex flex-col min-h-0">
@@ -1911,7 +1857,7 @@ export default function DbmsDashboard() {
           <div className="flex-grow hidden lg:block p-6 text-center text-xs text-brand-secondary/65 leading-relaxed border-b border-brand-light/30">
             <Shield size={36} className="mx-auto text-brand-secondary/30 mb-2" />
             <p><strong>Secure Connection</strong></p>
-            <p className="text-[10px] mt-1">IndexedDB capacity provides local workspace data storage without external network delays.</p>
+            <p className="text-[10px] mt-1">Firestore stores workspace data in the cloud so your clinic records remain available across browsers and devices.</p>
           </div>
         )}
 
@@ -3833,7 +3779,7 @@ export default function DbmsDashboard() {
                   <span>DBMS Backup, Restore & Clear Utilities</span>
                 </h3>
                 <p className="text-xs text-brand-dark/70 font-sans leading-relaxed">
-                  IndexedDB stores data securely in your local browser sandbox. To protect against browser cleaning or disk failures, we highly recommend exporting regular JSON backups.
+                  Your clinical records are now stored directly in Firestore. Backups are still recommended for offline recovery and export/import portability.
                 </p>
               </div>
 
@@ -4087,10 +4033,9 @@ export default function DbmsDashboard() {
               <div className="bg-brand-beige/40 border border-brand-light/45 p-4.5 rounded-2xl flex items-start space-x-3 text-xs text-brand-dark/85 leading-relaxed">
                 <Shield className="text-brand-secondary shrink-0 mt-0.5" size={16} />
                 <div>
-                  <strong>DBMS Security & Privacy Notice:</strong> All data transactions occur strictly client-side inside the local IndexedDB container. No patient case sheets, symptoms, diagnostics, or prescriptions are uploaded to any external server. To backup or transfer data, use the Export/Import tool above.
-                </div>
+                    <strong>DBMS Security & Privacy Notice:</strong> All clinical records are saved directly to Firestore. Data is stored remotely in your configured Firebase project; export backups remain recommended for offline recovery.
+            </div>
               </div>
-
             </div>
           )}
 

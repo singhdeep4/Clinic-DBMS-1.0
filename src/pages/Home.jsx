@@ -7,7 +7,7 @@ import {
   ClipboardList, TrendingUp, AlertCircle, CheckCircle2
 } from "lucide-react";
 import SEO from "../components/SEO";
-import { getAllItems, initDB, syncFromCloud } from "../lib/db";
+import { getAllItems, syncFromCloud } from "../lib/db";
 
 // Greeting based on time of day
 const getGreeting = () => {

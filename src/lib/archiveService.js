@@ -1,11 +1,10 @@
-import { initDB, putItem, getAllItems, deleteItem } from "./db.js";
+import { putItem, getAllItems, deleteItem } from "./db.js";
 
 const ARCHIVE_THRESHOLD_DAYS = 365; // 1 year retention policy as requested
 
 // Run archival sweep for visits older than 1 year
 export async function runArchivalSweep() {
   try {
-    const db = await initDB();
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() - ARCHIVE_THRESHOLD_DAYS);
     
@@ -61,27 +60,20 @@ export async function runArchivalSweep() {
 export async function getPatientArchivedVisits(patientId) {
   if (!patientId) return [];
   try {
-    const db = await initDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction("archived_records", "readonly");
-      const store = transaction.objectStore("archived_records");
-      const index = store.index("patientId");
-      const request = index.getAll(patientId);
-      
-      request.onsuccess = () => {
-        // Map to return the original visit records with the archive wrap details
-        const results = (request.result || []).map(archive => ({
-          ...archive.data,
-          archiveId: archive.archiveId,
-          archivedAt: archive.archivedAt,
-          archivedReason: archive.archivedReason
-        })).sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
-        
-        resolve(results);
+    const { collection, getDocs, query, where } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+    const visitsQuery = query(collection(fdb, "archived_records"), where("patientId", "==", patientId));
+    const querySnapshot = await getDocs(visitsQuery);
+    const results = querySnapshot.docs.map(docSnap => {
+      const archive = docSnap.data();
+      return {
+        ...archive.data,
+        archiveId: archive.archiveId || docSnap.id,
+        archivedAt: archive.archivedAt,
+        archivedReason: archive.archivedReason
       };
-      
-      request.onerror = () => reject(request.error);
-    });
+    }).sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
+    return results;
   } catch (err) {
     console.error("Error fetching patient archived visits:", err);
     return [];
@@ -93,16 +85,12 @@ export async function restoreArchivedVisit(archiveId) {
   if (!archiveId) return { success: false, error: "No archiveId provided" };
   
   try {
-    const db = await initDB();
+    const { doc, getDoc } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
     
     // 1. Find archived record
-    const archiveRecord = await new Promise((resolve, reject) => {
-      const transaction = db.transaction("archived_records", "readonly");
-      const store = transaction.objectStore("archived_records");
-      const request = store.get(archiveId);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+    const archiveSnapshot = await getDoc(doc(fdb, "archived_records", archiveId));
+    const archiveRecord = archiveSnapshot.exists() ? archiveSnapshot.data() : null;
     
     if (!archiveRecord) {
       return { success: false, error: "Archived record not found" };

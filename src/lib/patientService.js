@@ -1,4 +1,4 @@
-import { initDB, putItem, getAllItems } from "./db.js";
+import { putItem, getAllItems } from "./db.js";
 
 // Check if a patient already exists with the same phone and DOB
 export async function findDuplicatePatient(mobile, dob) {
@@ -6,28 +6,10 @@ export async function findDuplicatePatient(mobile, dob) {
   const cleanMobile = mobile.replace(/[^0-9]/g, "");
   
   try {
-    const db = await initDB();
-    return new Promise((resolve) => {
-      const transaction = db.transaction("patients", "readonly");
-      const store = transaction.objectStore("patients");
-      const index = store.index("mobile_dob");
-      const request = index.get([cleanMobile, dob]);
-      
-      request.onsuccess = () => {
-        resolve(request.result || null);
-      };
-      
-      request.onerror = (e) => {
-        console.warn("Index query failed, falling back to scanning.", e);
-        // Fallback scan
-        getAllItems("patients").then(patients => {
-          const match = patients.find(
-            p => (p.mobile || "").replace(/[^0-9]/g, "") === cleanMobile && p.dateOfBirth === dob
-          );
-          resolve(match || null);
-        }).catch(() => resolve(null));
-      };
-    });
+    const patients = await getAllItems("patients");
+    return patients.find(
+      p => (p.mobile || "").replace(/[^0-9]/g, "") === cleanMobile && p.dateOfBirth === dob
+    ) || null;
   } catch (err) {
     console.error("Duplicate check error:", err);
     return null;
@@ -39,34 +21,18 @@ export async function getPatientWithVisits(patientId) {
   if (!patientId) return null;
   
   try {
-    const db = await initDB();
-    
-    // Get patient details
-    const patientPromise = new Promise((resolve, reject) => {
-      const transaction = db.transaction("patients", "readonly");
-      const store = transaction.objectStore("patients");
-      const request = store.get(patientId);
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
-    });
-    
-    // Get visits
-    const visitsPromise = new Promise((resolve, reject) => {
-      const transaction = db.transaction("visits", "readonly");
-      const store = transaction.objectStore("visits");
-      const index = store.index("patientId");
-      const request = index.getAll(patientId);
-      request.onsuccess = () => {
-        const sorted = (request.result || []).sort(
-          (a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0)
-        );
-        resolve(sorted);
-      };
-      request.onerror = () => reject(request.error);
-    });
-    
-    const [patient, visits] = await Promise.all([patientPromise, visitsPromise]);
-    
+    const { doc, getDoc, collection, getDocs, query, where } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+
+    const patientSnapshot = await getDoc(doc(fdb, "patients", patientId));
+    const patient = patientSnapshot.exists() ? patientSnapshot.data() : null;
+
+    const visitsQuery = query(collection(fdb, "visits"), where("patientId", "==", patientId));
+    const visitsSnapshot = await getDocs(visitsQuery);
+    const visits = visitsSnapshot.docs
+      .map(docSnap => ({ id: docSnap.id, ...docSnap.data() }))
+      .sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
+
     return {
       patient,
       visits
@@ -81,20 +47,14 @@ export async function getPatientWithVisits(patientId) {
 export async function getPatientVisits(patientId) {
   if (!patientId) return [];
   try {
-    const db = await initDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction("visits", "readonly");
-      const store = transaction.objectStore("visits");
-      const index = store.index("patientId");
-      const request = index.getAll(patientId);
-      request.onsuccess = () => {
-        const sorted = (request.result || []).sort(
-          (a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0)
-        );
-        resolve(sorted);
-      };
-      request.onerror = () => reject(request.error);
-    });
+    const { collection, getDocs, query, where } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+
+    const visitsQuery = query(collection(fdb, "visits"), where("patientId", "==", patientId));
+    const visitsSnapshot = await getDocs(visitsQuery);
+    return visitsSnapshot.docs
+      .map(docSnap => ({ id: docSnap.id, ...docSnap.data() }))
+      .sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
   } catch (err) {
     console.error("Error fetching patient visits:", err);
     return [];
