@@ -1917,13 +1917,17 @@ export default function DbmsDashboard() {
                       )}
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      {patient.status === "Waiting" && (
+                      {(patient.status === "Waiting" || patient.status === "In-Consult") && (
                         <button
                           onClick={() => consultQueuePatient(patient)}
-                          className="text-[9px] font-bold uppercase bg-brand-primary text-brand-beige px-2 py-1 rounded-md hover:bg-brand-secondary transition-colors"
-                          title="Start consultation"
+                          className={`text-[9px] font-bold uppercase px-2 py-1 rounded-md transition-colors ${
+                            patient.status === "In-Consult"
+                              ? "bg-brand-secondary text-brand-beige hover:bg-brand-primary"
+                              : "bg-brand-primary text-brand-beige hover:bg-brand-secondary"
+                          }`}
+                          title={patient.status === "In-Consult" ? "Resume consultation" : "Start consultation"}
                         >
-                          Consult
+                          {patient.status === "In-Consult" ? "Resume" : "Consult"}
                         </button>
                       )}
                       <button
