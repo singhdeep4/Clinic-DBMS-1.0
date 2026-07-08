@@ -60,6 +60,16 @@ const normalizeComplaints = (complaintsArray) => {
   });
 };
 
+// Merge loaded patient data with DEFAULT_STATE to fill any missing fields
+const mergeWithDefaults = (data) => ({
+  ...DEFAULT_STATE,
+  ...data,
+  pastHistory: { ...DEFAULT_STATE.pastHistory, ...(data.pastHistory || {}) },
+  drugHistory: { ...DEFAULT_STATE.drugHistory, ...(data.drugHistory || {}) },
+  familyHistory: { ...DEFAULT_STATE.familyHistory, ...(data.familyHistory || {}) },
+  complaints: normalizeComplaints(data.chiefComplaints || data.complaints),
+});
+
 // Ayurvedic presets for rapid entry
 const MEDICINE_PRESETS = [
   "Triphala Churna", "Chandraprabha Vati", "Gandharvahastadi Kashayam", 
@@ -913,19 +923,18 @@ export default function DbmsDashboard() {
       const fullRecord = await getPatientWithVisits(c.patientId);
       if (fullRecord) {
         const activeVisit = fullRecord.visits.find(v => v.status === "active") || fullRecord.visits[0] || {};
-        const combined = {
+        const combined = mergeWithDefaults({
           ...fullRecord.patient,
           ...activeVisit,
-          complaints: normalizeComplaints(activeVisit.chiefComplaints || activeVisit.complaints),
           visits: fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
-        };
+        });
         setCurrentCase(combined);
         setViewMode("clinical");
         setActiveTab(targetTab);
         closeSidebarOnMobile();
         triggerNotification(`Loaded record of ${fullRecord.patient.name}`);
       } else {
-        setCurrentCase({ ...c });
+        setCurrentCase(mergeWithDefaults({ ...c }));
         setViewMode("clinical");
         setActiveTab(targetTab);
         closeSidebarOnMobile();
@@ -933,7 +942,7 @@ export default function DbmsDashboard() {
       }
     } catch (err) {
       console.error("Error selecting patient:", err);
-      setCurrentCase({ ...c });
+      setCurrentCase(mergeWithDefaults({ ...c }));
       setViewMode("clinical");
       setActiveTab("profile");
     }
@@ -945,15 +954,14 @@ export default function DbmsDashboard() {
       const fullRecord = await getPatientWithVisits(patient.patientId);
       if (fullRecord) {
         const activeVisit = fullRecord.visits.find(v => v.status === "active") || fullRecord.visits[0] || {};
-        setCurrentCase({
+        setCurrentCase(mergeWithDefaults({
           ...fullRecord.patient,
           ...activeVisit,
-          complaints: normalizeComplaints(activeVisit.chiefComplaints || activeVisit.complaints),
           visits: fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
-        });
+        }));
         triggerNotification(`Loaded patient record for ${patient.name}.`);
       } else {
-        setCurrentCase(prev => ({
+        setCurrentCase(prev => mergeWithDefaults({
           ...prev,
           patientId: patient.patientId,
           name: patient.name || "",
