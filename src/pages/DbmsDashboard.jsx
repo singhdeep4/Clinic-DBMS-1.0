@@ -623,12 +623,12 @@ export default function DbmsDashboard() {
     if (!currentCase.name.trim()) {
       triggerNotification("Patient Name is required to save case.");
       setActiveTab("profile");
-      return;
+      return null;
     }
     if (!currentCase.patientId && !currentCase.dateOfBirth) {
       triggerNotification("Date of Birth is required for new patient registration.");
       setActiveTab("profile");
-      return;
+      return null;
     }
 
     let updatedCase = { ...currentCase };
@@ -762,25 +762,28 @@ export default function DbmsDashboard() {
 
       triggerNotification(`Case Record Saved (ID: ${patientId}).`);
       await autoCheckoutQueuePatient(patientId, updatedCase.name, updatedCase.mobile, updatedCase.dateOfBirth);
+      return fullActive;
     } catch (err) {
       console.error("Save case failed:", err);
       triggerNotification("Failed to save case record.");
+      return null;
     }
   };
 
   // Archive active session details to visits history, reset active visit parameters
-  const handleRecordNewVisit = async () => {
-    if (!currentCase.patientId) {
+  const handleRecordNewVisit = async (caseDataOverride = null) => {
+    const activeCase = caseDataOverride || currentCase;
+    if (!activeCase.patientId) {
       triggerNotification("Please save the patient case first before recording a follow-up visit.");
       return;
     }
     
     try {
       // 1. Create a historical visit record from the active fields (same as original logic)
-      const activeVisit = JSON.parse(JSON.stringify(currentCase));
+      const activeVisit = JSON.parse(JSON.stringify(activeCase));
       delete activeVisit.visits;
       activeVisit.visitId = activeVisit.visitId || "VIS-" + Date.now();
-      activeVisit.visitDate = currentCase.visitDate || new Date().toISOString();
+      activeVisit.visitDate = activeCase.visitDate || new Date().toISOString();
       activeVisit.status = "completed";
       // Map complaints → chiefComplaints for storage consistency
       activeVisit.chiefComplaints = activeVisit.complaints || [];
@@ -792,7 +795,7 @@ export default function DbmsDashboard() {
       const newVisitId = "VIS-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
       
       const updatedCase = {
-        ...currentCase,
+        ...activeCase,
         visitId: newVisitId,
         visitDate: newVisitDate,
         status: "active",
@@ -807,7 +810,7 @@ export default function DbmsDashboard() {
 
       // 3. Fetch all visits to rebuild the history list
       const { getPatientVisits } = await import("../lib/patientService.js");
-      const allVisits = await getPatientVisits(currentCase.patientId);
+      const allVisits = await getPatientVisits(activeCase.patientId);
 
       updatedCase.visits = allVisits.filter(v => v.visitId !== newVisitId);
 
@@ -821,13 +824,13 @@ export default function DbmsDashboard() {
 
       // 5. Update the savedCases list with enriched data for alerts
       const updatedSavedCase = {
-        patientId: currentCase.patientId,
-        name: currentCase.name,
-        age: currentCase.age,
-        dateOfBirth: currentCase.dateOfBirth,
-        gender: currentCase.gender,
-        mobile: currentCase.mobile,
-        occupation: currentCase.occupation,
+        patientId: activeCase.patientId,
+        name: activeCase.name,
+        age: activeCase.age,
+        dateOfBirth: activeCase.dateOfBirth,
+        gender: activeCase.gender,
+        mobile: activeCase.mobile,
+        occupation: activeCase.occupation,
         visitDate: newVisitDate,
         complaints: updatedCase.complaints || [],
         labTests: updatedCase.labTests || [],
@@ -836,16 +839,23 @@ export default function DbmsDashboard() {
         agni: updatedCase.agni,
         mala: updatedCase.mala
       };
-      const casesList = savedCases.map(c => c.patientId === currentCase.patientId ? updatedSavedCase : c);
+      const casesList = savedCases.map(c => c.patientId === activeCase.patientId ? updatedSavedCase : c);
       casesList.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
       setSavedCases(casesList);
 
       triggerNotification("Current session archived to history. Started follow-up visit.");
       setActiveTab("complaints");
-      await autoCheckoutQueuePatient(currentCase.patientId, currentCase.name, currentCase.mobile, currentCase.dateOfBirth);
+      await autoCheckoutQueuePatient(activeCase.patientId, activeCase.name, activeCase.mobile, activeCase.dateOfBirth);
     } catch (err) {
       console.error("Error creating follow-up visit:", err);
       triggerNotification("Failed to record follow-up visit.");
+    }
+  };
+
+  const handleSaveAndRecordFollowUp = async () => {
+    const savedCaseData = await saveCase();
+    if (savedCaseData) {
+      await handleRecordNewVisit(savedCaseData);
     }
   };
 
@@ -3584,14 +3594,21 @@ export default function DbmsDashboard() {
                   currentCase.patientId ? (
                     <button
                       type="button"
-                      onClick={handleRecordNewVisit}
+                      onClick={() => handleRecordNewVisit()}
                       className="flex items-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md cursor-pointer animate-pulse"
                       title="Record follow-up / archive current visit and start new"
                     >
                       <Plus size={14} /> Record Follow-up
                     </button>
                   ) : (
-                    <div className="w-[84px]" />
+                    <button
+                      type="button"
+                      onClick={handleSaveAndRecordFollowUp}
+                      className="flex items-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md cursor-pointer animate-pulse"
+                      title="Save demographics and record follow-up"
+                    >
+                      <Save size={14} /> Save & Record Follow-up
+                    </button>
                   )
                 )}
               </div>
