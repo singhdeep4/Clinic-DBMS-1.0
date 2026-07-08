@@ -989,9 +989,22 @@ export default function DbmsDashboard() {
     try {
       const { getPatientWithVisits } = await import("../lib/patientService.js");
       const patientsList = await getAllItems("patients");
-      existingPatient = patientsList.find(
-        p => (p.mobile || "").replace(/[^0-9]/g, "") === cleanMobile
-      );
+      
+      if (patient.patientId) {
+        existingPatient = patientsList.find(p => p.patientId === patient.patientId);
+      } else {
+        const dob = patient.dateOfBirth || patient.dob;
+        if (dob) {
+          existingPatient = patientsList.find(
+            p => (p.mobile || "").replace(/[^0-9]/g, "") === cleanMobile && p.dateOfBirth === dob
+          );
+        } else {
+          existingPatient = patientsList.find(
+            p => (p.mobile || "").replace(/[^0-9]/g, "") === cleanMobile && 
+                 p.name.toLowerCase().trim() === patient.name.toLowerCase().trim()
+          );
+        }
+      }
       
       if (existingPatient) {
         const fullRecord = await getPatientWithVisits(existingPatient.patientId);
