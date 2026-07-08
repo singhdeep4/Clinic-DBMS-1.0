@@ -287,11 +287,11 @@ export default function PatientHome() {
                                 <AnimatePresence>
                                   {isMenuOpen && (
                                     <motion.div
-                                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                      initial={{ opacity: 0, y: -5, scale: 0.95 }}
                                       animate={{ opacity: 1, y: 0, scale: 1 }}
-                                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                      exit={{ opacity: 0, y: -5, scale: 0.95 }}
                                       transition={{ duration: 0.15 }}
-                                      className="absolute left-0 mt-2 w-48 bg-white border border-brand-primary/10 rounded-xl shadow-xl py-2 z-50 overflow-hidden text-brand-dark"
+                                      className="absolute left-0 bottom-full mb-2 w-48 bg-white border border-brand-primary/10 rounded-xl shadow-xl py-2 z-50 overflow-hidden text-brand-dark"
                                     >
                                       <div className="px-3 py-1 text-[9px] uppercase font-bold text-brand-secondary border-b border-brand-light/20 bg-brand-cream/35">
                                         Choose Option
