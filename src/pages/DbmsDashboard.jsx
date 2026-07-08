@@ -2428,7 +2428,24 @@ export default function DbmsDashboard() {
                           value={currentCase.occupation}
                           onChange={(e) => handleTextChange("occupation", e.target.value)}
                           placeholder="e.g. Software Engineer"
-                          className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none"
+                          className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-brand-primary uppercase tracking-wider mb-2">Consultation Date</label>
+                        <input
+                          type="date"
+                          value={currentCase.visitDate ? currentCase.visitDate.split("T")[0] : new Date().toISOString().split("T")[0]}
+                          onChange={(e) => {
+                            const selectedDate = e.target.value;
+                            const originalTime = currentCase.visitDate && currentCase.visitDate.includes("T") ? currentCase.visitDate.substring(currentCase.visitDate.indexOf("T")) : "T12:00:00.000Z";
+                            setCurrentCase(prev => ({
+                              ...prev,
+                              visitDate: selectedDate + originalTime
+                            }));
+                          }}
+                          className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
                         />
                       </div>
                     </div>
