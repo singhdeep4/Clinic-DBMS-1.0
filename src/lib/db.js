@@ -42,10 +42,27 @@ export async function putItem(storeName, item) {
 
 export async function deleteItem(storeName, key) {
   try {
-    const { doc, deleteDoc } = await import("firebase/firestore");
+    const { doc, deleteDoc, getDoc } = await import("firebase/firestore");
     const { db: fdb } = await import("./firebase.js");
     const docId = String(key);
-    await deleteDoc(doc(fdb, storeName, docId));
+
+    console.log(`[db.deleteItem] Attempting delete: store=${storeName} id=${docId}`);
+
+    // Check if document exists before deleting to aid debugging
+    try {
+      const docRef = doc(fdb, storeName, docId);
+      const snapshot = await getDoc(docRef);
+      if (!snapshot.exists()) {
+        console.warn(`[db.deleteItem] Document not found: ${storeName}/${docId}`);
+      } else {
+        console.log(`[db.deleteItem] Document exists. Deleting now: ${storeName}/${docId}`);
+      }
+      await deleteDoc(docRef);
+      console.log(`[db.deleteItem] Delete completed: ${storeName}/${docId}`);
+    } catch (innerErr) {
+      console.error(`[db.deleteItem] Error deleting ${storeName}/${docId}:`, innerErr);
+      throw innerErr;
+    }
   } catch (err) {
     console.error("Firestore deleteItem error:", err);
     throw err;
