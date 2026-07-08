@@ -1305,6 +1305,138 @@ export default function DbmsDashboard() {
     }
   };
 
+  // Cleanup inactive patients' older records (> 6 months inactivity)
+  const runStorageCleanupSweep = async () => {
+    const threshold = new Date();
+    threshold.setDate(threshold.getDate() - 180); // 6 months inactivity limit
+    
+    // Identify patients who haven't visited for > 6 months
+    const inactivePatients = savedCases.filter(c => c.visitDate && new Date(c.visitDate) < threshold);
+    
+    if (inactivePatients.length === 0) {
+      triggerNotification("No inactive patients (>6 months) found to clean up.");
+      return;
+    }
+
+    if (!window.confirm(`Found ${inactivePatients.length} patient(s) who haven't visited for more than 6 months. \n\nThis will: \n1. Keep their basic profile details. \n2. Keep only their absolute last follow-up visit. \n3. Permanently delete all older consult histories and archived records from Firestore. \n\nDo you want to proceed?`)) {
+      return;
+    }
+
+    try {
+      const { collection, getDocs, query, where } = await import("firebase/firestore");
+      const { db: fdb } = await import("../lib/firebase.js");
+      
+      let deletedVisitsCount = 0;
+      let deletedArchivesCount = 0;
+
+      for (const patient of inactivePatients) {
+        const patientId = patient.patientId;
+        
+        // A. Fetch all visits for this patient
+        const visitsQuery = query(collection(fdb, "visits"), where("patientId", "==", patientId));
+        const visitsSnapshot = await getDocs(visitsQuery);
+        const patientVisits = visitsSnapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          ...docSnap.data()
+        })).sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
+
+        // B. Fetch all archived visits for this patient
+        const archivedQuery = query(collection(fdb, "archived_records"), where("patientId", "==", patientId));
+        const archivedSnapshot = await getDocs(archivedQuery);
+        const patientArchives = archivedSnapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          ...docSnap.data()
+        })).sort((a, b) => new Date(b.data?.visitDate || 0) - new Date(a.data?.visitDate || 0));
+
+        if (patientVisits.length > 0) {
+          // We have active visits. Keep the newest one (index 0).
+          // Delete active visits older than the newest
+          if (patientVisits.length > 1) {
+            const visitsToDelete = patientVisits.slice(1);
+            const deletePromises = visitsToDelete.map(v => deleteItem("visits", v.id));
+            await Promise.all(deletePromises);
+            deletedVisitsCount += visitsToDelete.length;
+          }
+          // Delete all archived records since we already have the newest active visit
+          if (patientArchives.length > 0) {
+            const deleteArchivedPromises = patientArchives.map(a => deleteItem("archived_records", a.id));
+            await Promise.all(deleteArchivedPromises);
+            deletedArchivesCount += patientArchives.length;
+          }
+        } else if (patientArchives.length > 0) {
+          // No active visits, but we have archived visits.
+          // Keep the newest archived visit (index 0) and restore it to visits!
+          const newestArchive = patientArchives[0];
+          const visitToRestore = {
+            ...newestArchive.data,
+            status: "completed"
+          };
+          delete visitToRestore.archiveId;
+          delete visitToRestore.archivedAt;
+          delete visitToRestore.archivedReason;
+          
+          await putItem("visits", visitToRestore);
+          await deleteItem("archived_records", newestArchive.id);
+          
+          // Delete all other older archived visits
+          if (patientArchives.length > 1) {
+            const archivesToDelete = patientArchives.slice(1);
+            const deletePromises = archivesToDelete.map(a => deleteItem("archived_records", a.id));
+            await Promise.all(deletePromises);
+            deletedArchivesCount += archivesToDelete.length;
+          }
+        }
+      }
+
+      triggerNotification(`Storage cleanup complete: Deleted ${deletedVisitsCount} historical visits & ${deletedArchivesCount} archived files.`);
+      
+      // C. Refresh metrics and states
+      const { getStorageMetrics } = await import("../lib/archiveService.js");
+      const m = await getStorageMetrics();
+      setStorageMetrics(m);
+      
+      const archivesList = await getAllItems("archived_records");
+      setArchivedRecords(archivesList || []);
+      
+      // D. Re-fetch visits and patients to update savedCases
+      const patientsList = await getAllItems("patients");
+      const visits = await getAllItems("visits");
+      const patientVisitsMap = {};
+      visits.forEach(v => {
+        if (!patientVisitsMap[v.patientId] || new Date(v.visitDate) > new Date(patientVisitsMap[v.patientId].visitDate)) {
+          patientVisitsMap[v.patientId] = v;
+        }
+      });
+      const combinedPatients = patientsList.map(p => {
+        const latestVisit = patientVisitsMap[p.patientId];
+        if (latestVisit) {
+          return {
+            ...p,
+            visitDate: latestVisit.visitDate,
+            complaints: latestVisit.chiefComplaints || latestVisit.complaints || [],
+            labTests: latestVisit.labTests || [],
+            outcomeScore: latestVisit.outcomeScore || "No Improvement",
+            prakriti: latestVisit.prakriti || p.prakriti || "Vata-Pitta",
+            agni: latestVisit.agni || "Sama",
+            mala: latestVisit.mala || "Regular",
+            medicines: latestVisit.medicines || [],
+            nextFollowUp: latestVisit.nextFollowUp || "15 Days"
+          };
+        }
+        return {
+          ...p,
+          visitDate: p.createdAt || p.updatedAt
+        };
+      });
+      combinedPatients.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
+      setSavedCases(combinedPatients);
+      
+    } catch (err) {
+      console.error("Storage cleanup failed:", err);
+      triggerNotification("Failed to run storage cleanup.");
+    }
+  };
+
   // Compile visual stats metrics
   const getAnalytics = () => {
     const totalCases = savedCases.length;
@@ -3915,7 +4047,7 @@ export default function DbmsDashboard() {
               </div>
 
               {/* Utility grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 
                 {/* 1. Export */}
                 <div className="bg-brand-beige/20 border border-brand-light/45 p-6 rounded-2xl space-y-4 flex flex-col justify-between">
@@ -3934,7 +4066,7 @@ export default function DbmsDashboard() {
                   </button>
                 </div>
 
-                {/* 2. Import */}
+                {/* 2. Restore Database */}
                 <div className="bg-brand-beige/20 border border-brand-light/45 p-6 rounded-2xl space-y-4 flex flex-col justify-between relative">
                   <div className="space-y-2">
                     <Upload className="text-brand-secondary" size={28} />
@@ -3960,11 +4092,28 @@ export default function DbmsDashboard() {
                   </div>
                 </div>
 
-                {/* 3. Clear */}
+                {/* 3. Storage Cleanup Optimizer */}
+                <div className="bg-brand-beige/20 border border-brand-light/45 p-6 rounded-2xl space-y-4 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <Trash2 className="text-emerald-600 animate-pulse" size={28} />
+                    <h4 className="font-serif font-bold text-base text-brand-primary">3. Inactive Cleanup (6m+)</h4>
+                    <p className="text-xs text-brand-dark/65 leading-relaxed font-sans">
+                      Keep only basic details and the absolute latest follow-up visit. Deletes all older consult histories and archives for patients inactive &gt;6 months.
+                    </p>
+                  </div>
+                  <button
+                    onClick={runStorageCleanupSweep}
+                    className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer mt-4"
+                  >
+                    Clean Inactive Records
+                  </button>
+                </div>
+
+                {/* 4. Clear */}
                 <div className="bg-brand-beige/20 border border-brand-light/45 p-6 rounded-2xl space-y-4 flex flex-col justify-between">
                   <div className="space-y-2">
                     <AlertTriangle className="text-red-500 animate-pulse" size={28} />
-                    <h4 className="font-serif font-bold text-base text-brand-primary">3. Reset Database</h4>
+                    <h4 className="font-serif font-bold text-base text-brand-primary">4. Reset Database</h4>
                     <p className="text-xs text-brand-dark/65 leading-relaxed font-sans">
                       Delete all patient data records and registries. Passcode verification required.
                     </p>
