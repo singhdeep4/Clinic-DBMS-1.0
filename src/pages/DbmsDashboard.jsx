@@ -750,15 +750,16 @@ export default function DbmsDashboard() {
         medicines: visitData.medicines || [],
         nextFollowUp: visitData.nextFollowUp || "15 Days"
       };
-      const existingIndex = savedCases.findIndex(c => c.patientId === patientId);
-      let newSavedCases = [...savedCases];
-      if (existingIndex !== -1) {
-        newSavedCases[existingIndex] = updatedSavedCase;
-      } else {
-        newSavedCases = [updatedSavedCase, ...newSavedCases];
-      }
-      newSavedCases.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
-      setSavedCases(newSavedCases);
+      setSavedCases(prevCases => {
+        const existingIndex = prevCases.findIndex(c => c.patientId === patientId);
+        let updatedList = [...prevCases];
+        if (existingIndex !== -1) {
+          updatedList[existingIndex] = updatedSavedCase;
+        } else {
+          updatedList = [updatedSavedCase, ...updatedList];
+        }
+        return updatedList.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
+      });
 
       triggerNotification(`Case Record Saved (ID: ${patientId}).`);
       await autoCheckoutQueuePatient(patientId, updatedCase.name, updatedCase.mobile, updatedCase.dateOfBirth);
@@ -839,9 +840,16 @@ export default function DbmsDashboard() {
         agni: updatedCase.agni,
         mala: updatedCase.mala
       };
-      const casesList = savedCases.map(c => c.patientId === activeCase.patientId ? updatedSavedCase : c);
-      casesList.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
-      setSavedCases(casesList);
+      setSavedCases(prevCases => {
+        const existingIndex = prevCases.findIndex(c => c.patientId === activeCase.patientId);
+        let updatedList = [...prevCases];
+        if (existingIndex !== -1) {
+          updatedList[existingIndex] = updatedSavedCase;
+        } else {
+          updatedList = [updatedSavedCase, ...updatedList];
+        }
+        return updatedList.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
+      });
 
       triggerNotification("Current session archived to history. Started follow-up visit.");
       setActiveTab("complaints");
