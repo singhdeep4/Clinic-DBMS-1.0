@@ -72,6 +72,22 @@ export default function Navbar() {
                 />
               )}
             </Link>
+
+            <Link
+              to="/patient"
+              className={`text-sm font-semibold tracking-wide transition-colors relative py-2 ${
+                location.pathname === "/patient" ? "text-brand-primary" : "text-brand-secondary/85 hover:text-brand-primary"
+              }`}
+            >
+              Patient
+              {location.pathname === "/patient" && (
+                <motion.div
+                  layoutId="navActiveLine"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-primary"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+            </Link>
           </div>
 
           {/* Desktop Session controls */}
@@ -167,6 +183,17 @@ export default function Navbar() {
                 }`}
               >
                 {doctorLogged ? "Dashboard" : "Home"}
+              </Link>
+              <Link
+                to="/patient"
+                onClick={() => setIsOpen(false)}
+                className={`block px-4 py-3 rounded-lg text-base font-semibold transition-colors ${
+                  location.pathname === "/patient"
+                    ? "bg-brand-primary text-brand-beige"
+                    : "text-brand-secondary hover:bg-brand-light/35"
+                }`}
+              >
+                Patient
               </Link>
               
               <div className="pt-4 px-4 space-y-2 border-t border-brand-light/20">
