@@ -52,13 +52,15 @@ export async function deleteItem(storeName, key) {
     try {
       const docRef = doc(fdb, storeName, docId);
       const snapshot = await getDoc(docRef);
-      if (!snapshot.exists()) {
+      const existedBefore = snapshot.exists();
+      if (!existedBefore) {
         console.warn(`[db.deleteItem] Document not found: ${storeName}/${docId}`);
       } else {
         console.log(`[db.deleteItem] Document exists. Deleting now: ${storeName}/${docId}`);
       }
       await deleteDoc(docRef);
       console.log(`[db.deleteItem] Delete completed: ${storeName}/${docId}`);
+      return { existedBefore, deleted: true };
     } catch (innerErr) {
       console.error(`[db.deleteItem] Error deleting ${storeName}/${docId}:`, innerErr);
       throw innerErr;
