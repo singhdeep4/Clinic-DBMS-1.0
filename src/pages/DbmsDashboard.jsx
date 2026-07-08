@@ -317,6 +317,33 @@ export default function DbmsDashboard() {
     }
   }, [viewMode]);
 
+  // Force-upload local IndexedDB stores to Firestore (temporary admin utility)
+  const uploadLocalToCloud = async () => {
+    try {
+      const stores = ["patients", "visits", "queue", "archived_records", "registry", "cases"];
+      const { setDoc, doc } = await import("firebase/firestore");
+      const { db: fdb } = await import("../lib/firebase.js");
+
+      for (const storeName of stores) {
+        const items = await getAllItems(storeName).catch(() => []);
+        if (!items || items.length === 0) continue;
+        console.log(`Uploading ${items.length} items from local store '${storeName}' to Firestore...`);
+        for (const item of items) {
+          // pick a sensible ID field
+          const docId = (item.patientId || item.visitId || item.id || item.archiveId || item.patientId || Date.now()).toString();
+          await setDoc(doc(fdb, storeName, docId), JSON.parse(JSON.stringify(item))).catch(err => {
+            console.error(`Failed to upload item to ${storeName}/${docId}:`, err);
+          });
+        }
+      }
+      // Notify user
+      alert("Local → Cloud sync completed (check Firestore console).");
+    } catch (err) {
+      console.error("Local→Cloud sync failed:", err);
+      alert("Local→Cloud sync failed: " + (err?.message || err));
+    }
+  };
+
   // Sequential Patient ID Generator
   const generateNextPatientId = async () => {
     try {
@@ -1773,6 +1800,15 @@ export default function DbmsDashboard() {
               <span>Database Tools</span>
             </button>
           </div>
+        </div>
+        <div className="p-3 border-b border-brand-light/60">
+          <button
+            onClick={uploadLocalToCloud}
+            className="w-full bg-emerald-700 text-white text-[12px] font-bold py-2 rounded-lg hover:bg-emerald-600"
+            title="Push local IndexedDB data to Firestore (temporary)"
+          >
+            Sync Local → Cloud
+          </button>
         </div>
 
         {/* Sidebar Case Sheets list (Only show when in clinical workspace) */}
