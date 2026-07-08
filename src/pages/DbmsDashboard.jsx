@@ -236,6 +236,17 @@ export default function DbmsDashboard() {
       // 1. One-time auto migration from LocalStorage to IndexedDB
       await migrateFromLocalStorage();
       await migrateToV5();
+      // If local→cloud sync hasn't run yet on this device, run it now
+      try {
+        const alreadySynced = localStorage.getItem("ayurkaya_local_to_cloud_synced") === "true";
+        if (!alreadySynced) {
+          // upload local stores to cloud (this function skips empty stores)
+          await uploadLocalToCloud();
+        }
+      } catch (e) {
+        console.warn("Local→Cloud auto-sync check failed:", e);
+      }
+
       // Sync latest patient records from Cloud Firestore database
       await syncFromCloud();
       
@@ -336,7 +347,8 @@ export default function DbmsDashboard() {
           });
         }
       }
-      // Notify user
+      // Mark as synced and notify user
+      try { localStorage.setItem("ayurkaya_local_to_cloud_synced", "true"); } catch(e){}
       alert("Local → Cloud sync completed (check Firestore console).");
     } catch (err) {
       console.error("Local→Cloud sync failed:", err);
