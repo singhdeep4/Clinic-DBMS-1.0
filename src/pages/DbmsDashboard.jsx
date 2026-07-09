@@ -251,6 +251,9 @@ export default function DbmsDashboard() {
     localStorage.setItem("ayurkaya_cloud_plan", plan);
   };
 
+  // State for historical visit purging threshold (1m, 3m, 6m, 9m, 1y)
+  const [cleanupThreshold, setCleanupThreshold] = useState("6m");
+
   const handleCustomLimitChange = (val) => {
     if (val === "") {
       setCustomLimitGB("");
@@ -1379,20 +1382,28 @@ export default function DbmsDashboard() {
     }
   };
 
-  // Cleanup inactive patients' older records (> 6 months inactivity)
+  // Cleanup historical patient visits beyond the selected threshold
   const runStorageCleanupSweep = async () => {
     const threshold = new Date();
-    threshold.setDate(threshold.getDate() - 180); // 6 months inactivity limit
-    
-    // Identify patients who haven't visited for > 6 months
-    const inactivePatients = savedCases.filter(c => c.visitDate && new Date(c.visitDate) < threshold);
-    
-    if (inactivePatients.length === 0) {
-      triggerNotification("No inactive patients (>6 months) found to clean up.");
-      return;
+    let label = "";
+    if (cleanupThreshold === "1m") {
+      threshold.setMonth(threshold.getMonth() - 1);
+      label = "1 month";
+    } else if (cleanupThreshold === "3m") {
+      threshold.setMonth(threshold.getMonth() - 3);
+      label = "3 months";
+    } else if (cleanupThreshold === "6m") {
+      threshold.setMonth(threshold.getMonth() - 6);
+      label = "6 months";
+    } else if (cleanupThreshold === "9m") {
+      threshold.setMonth(threshold.getMonth() - 9);
+      label = "9 months";
+    } else if (cleanupThreshold === "1y") {
+      threshold.setFullYear(threshold.getFullYear() - 1);
+      label = "1 year";
     }
 
-    if (!window.confirm(`Found ${inactivePatients.length} patient(s) who haven't visited for more than 6 months. \n\nThis will: \n1. Keep their basic profile details. \n2. Keep only their absolute last follow-up visit. \n3. Permanently delete all older consult histories and archived records from Firestore. \n\nDo you want to proceed?`)) {
+    if (!window.confirm(`This will perform a historical purge sweep for visits older than ${label}.\n\nFor every patient, the system will:\n1. Keep all basic profile and contact details intact.\n2. STRICTLY KEEP their most recent visit (regardless of its date, so they always retain at least one consult history).\n3. Delete older historical visits and archives beyond the ${label} threshold to save space.\n\nDo you want to proceed?`)) {
       return;
     }
 
@@ -1403,66 +1414,78 @@ export default function DbmsDashboard() {
       let deletedVisitsCount = 0;
       let deletedArchivesCount = 0;
 
-      for (const patient of inactivePatients) {
+      // Get all patients registered
+      const patientsList = await getAllItems("patients");
+      if (patientsList.length === 0) {
+        triggerNotification("No patient profiles found to clean up.");
+        return;
+      }
+
+      for (const patient of patientsList) {
         const patientId = patient.patientId;
         
-        // A. Fetch all visits for this patient
+        // Fetch all visits
         const visitsQuery = query(collection(fdb, "visits"), where("patientId", "==", patientId));
         const visitsSnapshot = await getDocs(visitsQuery);
         const patientVisits = visitsSnapshot.docs.map(docSnap => ({
           id: docSnap.id,
           ...docSnap.data()
-        })).sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
+        }));
 
-        // B. Fetch all archived visits for this patient
+        // Fetch all archives
         const archivedQuery = query(collection(fdb, "archived_records"), where("patientId", "==", patientId));
         const archivedSnapshot = await getDocs(archivedQuery);
         const patientArchives = archivedSnapshot.docs.map(docSnap => ({
           id: docSnap.id,
           ...docSnap.data()
-        })).sort((a, b) => new Date(b.data?.visitDate || 0) - new Date(a.data?.visitDate || 0));
+        }));
 
-        if (patientVisits.length > 0) {
-          // We have active visits. Keep the newest one (index 0).
-          // Delete active visits older than the newest
-          if (patientVisits.length > 1) {
-            const visitsToDelete = patientVisits.slice(1);
-            const deletePromises = visitsToDelete.map(v => deleteItem("visits", v.id));
-            await Promise.all(deletePromises);
-            deletedVisitsCount += visitsToDelete.length;
-          }
-          // Delete all archived records since we already have the newest active visit
-          if (patientArchives.length > 0) {
-            const deleteArchivedPromises = patientArchives.map(a => deleteItem("archived_records", a.id));
-            await Promise.all(deleteArchivedPromises);
-            deletedArchivesCount += patientArchives.length;
-          }
-        } else if (patientArchives.length > 0) {
-          // No active visits, but we have archived visits.
-          // Keep the newest archived visit (index 0) and restore it to visits!
-          const newestArchive = patientArchives[0];
+        // Combine and sort descending (index 0 is the most recent visit)
+        const allVisits = [
+          ...patientVisits.map(v => ({ ...v, type: "active" })),
+          ...patientArchives.map(a => ({ ...a, type: "archive" }))
+        ].sort((a, b) => new Date(b.visitDate || b.data?.visitDate || 0) - new Date(a.visitDate || a.data?.visitDate || 0));
+
+        if (allVisits.length <= 1) {
+          // Patient has 0 or 1 visit in total. We keep it regardless of age.
+          continue;
+        }
+
+        // 1. Ensure the newest visit (allVisits[0]) is active (restore if it was archived)
+        const newestVisit = allVisits[0];
+        if (newestVisit.type === "archive") {
           const visitToRestore = {
-            ...newestArchive.data,
+            ...newestVisit.data,
             status: "completed"
           };
           delete visitToRestore.archiveId;
           delete visitToRestore.archivedAt;
           delete visitToRestore.archivedReason;
-          
           await putItem("visits", visitToRestore);
-          await deleteItem("archived_records", newestArchive.id);
+          await deleteItem("archived_records", newestVisit.id);
+        }
+
+        // 2. Process all older visits (from index 1 onwards)
+        const olderVisits = allVisits.slice(1);
+        for (const visit of olderVisits) {
+          const visitDateStr = visit.visitDate || visit.data?.visitDate;
+          if (!visitDateStr) continue;
           
-          // Delete all other older archived visits
-          if (patientArchives.length > 1) {
-            const archivesToDelete = patientArchives.slice(1);
-            const deletePromises = archivesToDelete.map(a => deleteItem("archived_records", a.id));
-            await Promise.all(deletePromises);
-            deletedArchivesCount += archivesToDelete.length;
+          const visitDate = new Date(visitDateStr);
+          // If the visit is older than our threshold date, purge it!
+          if (visitDate < threshold) {
+            if (visit.type === "active") {
+              await deleteItem("visits", visit.id);
+              deletedVisitsCount++;
+            } else if (visit.type === "archive") {
+              await deleteItem("archived_records", visit.id);
+              deletedArchivesCount++;
+            }
           }
         }
       }
 
-      triggerNotification(`Storage cleanup complete: Deleted ${deletedVisitsCount} historical visits & ${deletedArchivesCount} archived files.`);
+      triggerNotification(`Historical purge complete: Deleted ${deletedVisitsCount} old active visits and ${deletedArchivesCount} archives.`);
       
       // C. Refresh metrics and states
       const { getStorageMetrics } = await import("../lib/archiveService.js");
@@ -1473,15 +1496,15 @@ export default function DbmsDashboard() {
       setArchivedRecords(archivesList || []);
       
       // D. Re-fetch visits and patients to update savedCases
-      const patientsList = await getAllItems("patients");
-      const visits = await getAllItems("visits");
+      const patientsListUpdated = await getAllItems("patients");
+      const visitsUpdated = await getAllItems("visits");
       const patientVisitsMap = {};
-      visits.forEach(v => {
+      visitsUpdated.forEach(v => {
         if (!patientVisitsMap[v.patientId] || new Date(v.visitDate) > new Date(patientVisitsMap[v.patientId].visitDate)) {
           patientVisitsMap[v.patientId] = v;
         }
       });
-      const combinedPatients = patientsList.map(p => {
+      const combinedPatients = patientsListUpdated.map(p => {
         const latestVisit = patientVisitsMap[p.patientId];
         if (latestVisit) {
           return {
@@ -4247,16 +4270,30 @@ export default function DbmsDashboard() {
                 <div className="bg-brand-beige/20 border border-brand-light/45 p-6 rounded-2xl space-y-4 flex flex-col justify-between">
                   <div className="space-y-2">
                     <Trash2 className="text-emerald-600 animate-pulse" size={28} />
-                    <h4 className="font-serif font-bold text-base text-brand-primary">3. Inactive Cleanup (6m+)</h4>
+                    <h4 className="font-serif font-bold text-base text-brand-primary">3. Historical Visit Purge</h4>
                     <p className="text-xs text-brand-dark/65 leading-relaxed font-sans">
-                      Keep only basic details and the absolute latest follow-up visit. Deletes all older consult histories and archives for patients inactive &gt;6 months.
+                      Delete older consultations and timelines to save space. Strictly preserves each patient's basic profile details and their absolute latest visit.
                     </p>
+                    <div className="space-y-1.5 mt-4">
+                      <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider">Purge visits older than:</label>
+                      <select
+                        value={cleanupThreshold}
+                        onChange={(e) => setCleanupThreshold(e.target.value)}
+                        className="w-full bg-brand-beige border border-brand-light/75 px-3 py-2 rounded-xl text-xs font-semibold text-brand-secondary focus:outline-none cursor-pointer"
+                      >
+                        <option value="1m">1 Month (Keep most recent)</option>
+                        <option value="3m">3 Months (Keep most recent)</option>
+                        <option value="6m">6 Months (Keep most recent)</option>
+                        <option value="9m">9 Months (Keep most recent)</option>
+                        <option value="1y">1 Year (Keep most recent)</option>
+                      </select>
+                    </div>
                   </div>
                   <button
                     onClick={runStorageCleanupSweep}
                     className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer mt-4"
                   >
-                    Clean Inactive Records
+                    Run Purge Sweep
                   </button>
                 </div>
 
