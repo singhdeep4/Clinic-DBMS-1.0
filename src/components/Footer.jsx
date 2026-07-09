@@ -1,4 +1,3 @@
-import React from "react";
 import { Link } from "react-router-dom";
 import { Leaf, Phone, Mail, MapPin, Clock, MessageCircle } from "lucide-react";
 

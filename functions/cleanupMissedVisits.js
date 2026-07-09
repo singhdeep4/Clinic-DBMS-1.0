@@ -14,7 +14,7 @@ admin.initializeApp();
  */
 exports.cleanupMissedVisits = functions.pubsub
   .schedule("every 2 weeks")
-  .onRun(async (context) => {
+  .onRun(async () => {
     const db = admin.firestore();
     const now = new Date();
     const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);

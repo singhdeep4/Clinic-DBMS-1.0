@@ -11,7 +11,7 @@ const db = getFirestore();
  * Prunes patient visits older than 180 days (6 months) to save cloud storage space.
  * Crucially, it preserves the single latest visit for each patient even if it is older than 6 months.
  */
-exports.pruneOldVisits = onSchedule("0 0 1 * *", async (event) => {
+exports.pruneOldVisits = onSchedule("0 0 1 * *", async () => {
   const now = new Date();
   // 180 days in milliseconds
   const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
@@ -93,7 +93,7 @@ exports.pruneOldVisits = onSchedule("0 0 1 * *", async (event) => {
  * Cleans up old visit history for patients who haven't visited in 6+ months (180 days)
  * Preserves the absolute latest visit per patient + patient basic info
  */
-exports.cleanupMissedVisits = onSchedule("every 2 weeks", async (event) => {
+exports.cleanupMissedVisits = onSchedule("every 2 weeks", async () => {
   const now = new Date();
   const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
   const sixMonthsAgoStr = sixMonthsAgo.toISOString();

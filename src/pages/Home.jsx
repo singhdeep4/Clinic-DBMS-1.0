@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  UserPlus, Search, FileText, Clock, Users, Activity,
+  UserPlus, Search, FileText, Clock, Users,
   CalendarDays, Stethoscope, ArrowRight, Leaf, LogOut,
-  ClipboardList, TrendingUp, AlertCircle, CheckCircle2
+  ClipboardList, TrendingUp, CheckCircle2
 } from "lucide-react";
 import SEO from "../components/SEO";
 import { getAllItems, syncFromCloud } from "../lib/db";
@@ -91,8 +91,8 @@ const quickActions = [
 
 export default function Home() {
   const navigate = useNavigate();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const isAuthenticated = localStorage.getItem("ayurkaya_doctor_logged_in") === "true";
+  const isLoading = false;
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Dashboard data
@@ -103,16 +103,7 @@ export default function Home() {
   const [liveQueue, setLiveQueue] = useState([]);
   const [pendingFollowUps, setPendingFollowUps] = useState(0);
 
-  // Auth check
-  useEffect(() => {
-    const isDocLogged = localStorage.getItem("ayurkaya_doctor_logged_in");
-    if (isDocLogged === "true") {
-      setIsAuthenticated(true);
-    } else {
-      setIsAuthenticated(false);
-    }
-    setIsLoading(false);
-  }, [navigate]);
+  // Auth check is now initialized synchronously in state
 
   // Live clock
   useEffect(() => {

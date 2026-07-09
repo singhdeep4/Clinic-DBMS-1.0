@@ -85,11 +85,11 @@ export default function PatientHome() {
 
   // Local state for DOB text input masking/writing
   const [dobInput, setDobInput] = useState("");
-
-  // Sync local dobInput when parent state loads/changes
-  useEffect(() => {
+  const [prevDob, setPrevDob] = useState(null);
+  if (dob !== prevDob) {
+    setPrevDob(dob);
     setDobInput(toDisplayDate(dob || ""));
-  }, [dob]);
+  }
 
   // Verification states for returning patients
   const [isVerifying, setIsVerifying] = useState(false);
@@ -164,7 +164,7 @@ export default function PatientHome() {
       return;
     }
 
-    let payload = null;
+    let payload;
 
     if (visitType === "first") {
       // New Patient validations

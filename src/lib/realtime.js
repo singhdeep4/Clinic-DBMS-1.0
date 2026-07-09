@@ -27,7 +27,9 @@ export function startRealtimeListeners(onChange) {
   return () => {
     console.log("[Realtime] Unsubscribing all listeners...");
     for (const u of unsubscribers) {
-      try { u(); } catch (e) {}
+      try { u(); } catch {
+        // Ignore unsubscribe error
+      }
     }
   };
 }

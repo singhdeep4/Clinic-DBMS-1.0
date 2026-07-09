@@ -1,7 +1,6 @@
-import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Leaf, ShieldAlert } from "lucide-react";
+import { ArrowRight, Leaf } from "lucide-react";
 
 export default function Hero() {
   return (

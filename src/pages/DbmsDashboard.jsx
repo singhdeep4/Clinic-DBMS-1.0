@@ -1,8 +1,8 @@
 import { startRealtimeListeners } from "../lib/realtime.js";
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
-  Lock, User, FileText, Activity, ShieldAlert, Heart, Plus, Trash2, 
+  User, Plus, Trash2, 
   Search, Printer, Save, RefreshCw, LogOut, Check, PlusCircle, ArrowLeft, ArrowRight,
   Database, BarChart3, Bell, Shield, Download, Upload, AlertTriangle, Calendar, MessageCircle, Menu
 } from "lucide-react";
@@ -103,6 +103,10 @@ const LAB_PANELS = {
   ]
 };
 
+const generateVisitId = () => {
+  return "VIS-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+};
+
 const DEFAULT_STATE = {
   patientId: "",
   name: "",
@@ -157,7 +161,6 @@ const DEFAULT_STATE = {
   activity: "Sedentary",
   exercise: "None",
   divaswap: "Never",
-  stressLevel: "Low",
   screenTime: "<2 hrs",
   
   // Treatments
@@ -216,7 +219,7 @@ const toIsoDate = (displayString) => {
 
 export default function DbmsDashboard() {
   const navigate = useNavigate();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const isAuthenticated = localStorage.getItem("ayurkaya_doctor_logged_in") === "true";
   const dobPickerRef = useRef(null);
   
   // Main view navigation: "clinical" | "analytics" | "followups" | "utilities"
@@ -227,7 +230,6 @@ export default function DbmsDashboard() {
   const [matchingPatients, setMatchingPatients] = useState([]);
   const [duplicatePatientFound, setDuplicatePatientFound] = useState(null);
   const [storageMetrics, setStorageMetrics] = useState(null);
-  const [archivedRecords, setArchivedRecords] = useState([]);
   const [currentCase, setCurrentCase] = useState({ ...DEFAULT_STATE });
   const [searchTerm, setSearchTerm] = useState("");
   const [isPrintMode, setIsPrintMode] = useState(false);
@@ -236,11 +238,11 @@ export default function DbmsDashboard() {
 
   // Local state for DOB text input masking/writing
   const [dobInput, setDobInput] = useState("");
-
-  // Sync local dobInput when parent state loads/changes
-  useEffect(() => {
+  const [prevDob, setPrevDob] = useState(null);
+  if (currentCase.dateOfBirth !== prevDob) {
+    setPrevDob(currentCase.dateOfBirth);
     setDobInput(toDisplayDate(currentCase.dateOfBirth || ""));
-  }, [currentCase.dateOfBirth]);
+  }
 
   // Local state for cloud database plan
   const [cloudPlan, setCloudPlan] = useState(() => localStorage.getItem("ayurkaya_cloud_plan") || "spark");
@@ -381,13 +383,10 @@ export default function DbmsDashboard() {
 
   // Check doctor authentication session
   useEffect(() => {
-    const isDocLogged = localStorage.getItem("ayurkaya_doctor_logged_in");
-    if (isDocLogged === "true") {
-      setIsAuthenticated(true);
-    } else {
+    if (!isAuthenticated) {
       navigate("/login");
     }
-  }, [navigate]);
+  }, [isAuthenticated, navigate]);
 
   // Handle auto-loading a patient from URL parameters (e.g. from follow-up/revisit links)
   useEffect(() => {
@@ -401,6 +400,7 @@ export default function DbmsDashboard() {
       // Load the patient with the specified tab (defaults to profile)
       selectCase({ patientId: urlPatientId }, urlActiveTab || "profile");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   // Load cases, queue, and start realtime listeners once on mount
@@ -439,8 +439,6 @@ export default function DbmsDashboard() {
         const queue = await getAllItems("queue");
         console.log(`[Dashboard] Loaded ${queue.length} queue items`);
         setLiveQueue(queue || []);
-        const archivesList = await getAllItems("archived_records");
-        setArchivedRecords(archivesList || []);
       } catch (err) {
         console.error("[Dashboard] Error refreshing data:", err);
       }
@@ -452,12 +450,18 @@ export default function DbmsDashboard() {
     // start realtime listeners which call refreshAll on any collection change
     unsubscribeRealtime = startRealtimeListeners((storeName) => {
       console.log(`[Dashboard] Realtime event: ${storeName} changed, refreshing...`);
-      try { refreshAll(); } catch (e) { console.error(e); }
+      try { refreshAll(); } catch {
+        // Ignore refresh errors
+      }
     });
 
     return () => {
       console.log("[Dashboard] Cleanup: Unsubscribing realtime listeners");
-      try { unsubscribeRealtime && unsubscribeRealtime(); } catch (e) {}
+      try {
+        if (unsubscribeRealtime) unsubscribeRealtime();
+      } catch {
+        // Ignore unsubscribe errors
+      }
     };
   }, [isAuthenticated]);
 
@@ -479,9 +483,6 @@ export default function DbmsDashboard() {
           const { getStorageMetrics } = await import("../lib/archiveService.js");
           const metrics = await getStorageMetrics();
           setStorageMetrics(metrics);
-          
-          const archivesList = await getAllItems("archived_records");
-          setArchivedRecords(archivesList || []);
         } catch (err) {
           console.error("Error loading metrics / archives:", err);
         }
@@ -490,16 +491,6 @@ export default function DbmsDashboard() {
     }
   }, [viewMode]);
 
-  // Sequential Patient ID Generator
-  const generateNextPatientId = async () => {
-    try {
-      const { getNextPatientId } = await import("../lib/patientService.js");
-      return await getNextPatientId();
-    } catch (err) {
-      console.error("Error generating next patient ID:", err);
-      return `PAT-${Date.now()}`;
-    }
-  };
 
   // Auto-fill or find matching patient profiles when 10-digit mobile is typed
   useEffect(() => {
@@ -534,8 +525,9 @@ export default function DbmsDashboard() {
       }
       checkRegistry();
     } else {
-      setMatchingPatients([]);
+      setTimeout(() => setMatchingPatients([]), 0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCase.mobile]);
 
   // Duplicate Check logic when phone and DOB are provided (only for new registrations)
@@ -559,10 +551,10 @@ export default function DbmsDashboard() {
     }
   }, [currentCase.mobile, currentCase.dateOfBirth, currentCase.patientId]);
 
-  const triggerNotification = (msg) => {
+  function triggerNotification(msg) {
     setNotification(msg);
     setTimeout(() => setNotification(""), 3500);
-  };
+  }
 
   const handleLogout = () => {
     localStorage.removeItem("ayurkaya_doctor_logged_in");
@@ -951,7 +943,7 @@ export default function DbmsDashboard() {
       // 1. Create a historical visit record from the active fields (same as original logic)
       const activeVisit = JSON.parse(JSON.stringify(activeCase));
       delete activeVisit.visits;
-      activeVisit.visitId = activeVisit.visitId || "VIS-" + Date.now();
+      activeVisit.visitId = activeVisit.visitId || generateVisitId();
       activeVisit.visitDate = activeCase.visitDate || new Date().toISOString();
       activeVisit.status = "completed";
       // Map complaints → chiefComplaints for storage consistency
@@ -961,7 +953,7 @@ export default function DbmsDashboard() {
 
       // 2. Prepare the new active case state (same reset logic as original)
       const newVisitDate = new Date().toISOString();
-      const newVisitId = "VIS-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+      const newVisitId = generateVisitId();
       
       const updatedCase = {
         ...activeCase,
@@ -1057,7 +1049,7 @@ export default function DbmsDashboard() {
   };
 
   // Load selected case into active editor
-  const selectCase = async (c, targetTab = "profile") => {
+  async function selectCase(c, targetTab = "profile") {
     try {
       const { getPatientWithVisits } = await import("../lib/patientService.js");
       const fullRecord = await getPatientWithVisits(c.patientId);
@@ -1084,9 +1076,9 @@ export default function DbmsDashboard() {
       console.error("Error selecting patient:", err);
       setCurrentCase(mergeWithDefaults({ ...c }));
       setViewMode("clinical");
-      setActiveTab("profile");
+      setActiveTab(targetTab);
     }
-  };
+  }
 
   const loadSelectedPatientProfile = async (patient) => {
     try {
@@ -1288,27 +1280,6 @@ export default function DbmsDashboard() {
     triggerNotification(`Consultation initialized for ${patient.name}`);
   };
 
-  // Re-order queue (Mark late / push back)
-  const pushBackPatient = async (index) => {
-    if (index >= liveQueue.length - 1) {
-      triggerNotification("Patient is already at the end of the queue.");
-      return;
-    }
-    
-    const updatedQueue = [...liveQueue];
-    const patient = updatedQueue[index];
-    
-    updatedQueue.splice(index, 1);
-    updatedQueue.splice(index + 1, 0, patient);
-    setLiveQueue(updatedQueue);
-    
-    // Rewrite live queue state in Firestore
-    await clearStore("queue");
-    for (const q of updatedQueue) {
-      await putItem("queue", q);
-    }
-    triggerNotification(`Pushed ${patient.name} back in queue.`);
-  };
 
   // Remove patient from waiting list
   const completeQueuePatient = async (id) => {
@@ -1373,16 +1344,20 @@ export default function DbmsDashboard() {
   // JSON Database Export
   const handleExportBackup = async () => {
     try {
-      const cases = await getAllItems("cases");
-      const registry = await getAllItems("registry");
+      const patients = await getAllItems("patients");
+      const visits = await getAllItems("visits");
       const queue = await getAllItems("queue");
+      const archived_records = await getAllItems("archived_records");
+      const registry = await getAllItems("registry");
       
       const backupData = {
-        version: 2,
+        version: 3,
         exportedAt: new Date().toISOString(),
-        cases,
-        registry,
-        queue
+        patients,
+        visits,
+        queue,
+        archived_records,
+        registry
       };
       
       const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
@@ -1408,36 +1383,186 @@ export default function DbmsDashboard() {
     reader.onload = async (event) => {
       try {
         const data = JSON.parse(event.target.result);
-        if (data.version && Array.isArray(data.cases)) {
-          // Clear current stores first
-          await clearStore("cases");
-          await clearStore("registry");
-          await clearStore("queue");
+        
+        // Support importing either version 3 (new cloud format) or version 2 (cases/registry/queue)
+        const hasVersion3Data = data.version === 3 && Array.isArray(data.patients);
+        const hasVersion2Data = data.version === 2 && Array.isArray(data.cases);
 
-          // Insert cases
-          for (const c of data.cases) {
-            await putItem("cases", c);
-          }
-          // Insert registry profiles
-          if (Array.isArray(data.registry)) {
-            for (const r of data.registry) {
+        if (hasVersion3Data || hasVersion2Data) {
+          // Clear current stores first
+          await clearStore("patients");
+          await clearStore("visits");
+          await clearStore("queue");
+          await clearStore("archived_records");
+          await clearStore("registry");
+
+          if (hasVersion3Data) {
+            // Restore version 3 (patients + visits + queue + archived_records + registry)
+            for (const p of data.patients) {
+              await putItem("patients", p);
+            }
+            if (Array.isArray(data.visits)) {
+              for (const v of data.visits) {
+                await putItem("visits", v);
+              }
+            }
+            if (Array.isArray(data.queue)) {
+              for (const q of data.queue) {
+                await putItem("queue", q);
+              }
+            }
+            if (Array.isArray(data.archived_records)) {
+              for (const ar of data.archived_records) {
+                await putItem("archived_records", ar);
+              }
+            }
+            if (Array.isArray(data.registry)) {
+              for (const r of data.registry) {
+                await putItem("registry", r);
+              }
+            }
+          } else {
+            // Backward compatibility: Restore version 2 (cases -> patients/visits)
+            const importedPatients = new Map();
+            const importedVisits = [];
+            const importedRegistry = [];
+
+            // 1. Recover patients from registry or cases
+            const registryList = Array.isArray(data.registry) ? data.registry : [];
+            for (const reg of registryList) {
+              if (reg.patientId) {
+                importedPatients.set(reg.patientId, reg);
+                importedRegistry.push(reg);
+              }
+            }
+
+            // 2. Recover visits and patient profiles from cases
+            for (const c of data.cases) {
+              const patientId = c.patientId;
+              if (!patientId) continue;
+
+              // If this patient profile wasn't in registry, reconstruct from case
+              if (!importedPatients.has(patientId)) {
+                const patientProfile = {
+                  patientId,
+                  name: c.name || "",
+                  age: c.age || "",
+                  gender: c.gender || "Male",
+                  mobile: c.mobile || "",
+                  occupation: c.occupation || ""
+                };
+                importedPatients.set(patientId, patientProfile);
+
+                const registryProfile = {
+                  patientId,
+                  name: c.name || "",
+                  gender: c.gender || "Male",
+                  mobile: c.mobile || "",
+                  occupation: c.occupation || "",
+                  updatedAt: new Date().toISOString()
+                };
+                importedRegistry.push(registryProfile);
+              }
+
+              // Extract visits from case
+              const activeVisit = {
+                visitId: c.visitId || `VIS-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                patientId,
+                visitDate: c.visitDate || new Date().toISOString(),
+                status: "active",
+                kshudha: c.kshudha || "Sama",
+                mutra: c.mutra || "Normal",
+                mala: c.mala || "Regular",
+                koshtha: c.koshtha || "Madhya",
+                nidra: c.nidra || "Sound Sleep",
+                avastha: c.avastha || "Sama",
+                prakriti: c.prakriti || "Vata-Pitta",
+                vikriti: c.vikriti || "Vata",
+                doshajaVikriti: c.doshajaVikriti || "Vataja",
+                dhatugataVikriti: c.dhatugataVikriti || [],
+                dosha: c.dosha || { vata: true, pitta: false, kapha: false },
+                dushya: c.dushya || { rasa: true, rakta: false, mamsa: false, meda: false, asthi: false, majja: false, shukra: false },
+                srotas: c.srotas || { annavaha: true, pranavaha: false, rasavaha: false, raktavaha: false, medovaha: false, mutravaha: false, purishavaha: false },
+                agni: c.agni || "Sama",
+                samprapti: c.samprapti || "",
+                sampraptiCustom: c.sampraptiCustom || "",
+                ayurvedicDiagnosis: c.ayurvedicDiagnosis || "",
+                modernDiagnosis: c.modernDiagnosis || "",
+                diet: c.diet || "Vegetarian",
+                mealPattern: c.mealPattern || "Regular",
+                waterIntake: c.waterIntake || "1–2 L/day",
+                viruddhaAhara: c.viruddhaAhara || "Never",
+                teaCoffee: c.teaCoffee || "None",
+                activity: c.activity || "Sedentary",
+                exercise: c.exercise || "None",
+                divaswap: c.divaswap || "Never",
+                screenTime: c.screenTime || "<2 hrs",
+                medicines: c.medicines || [],
+                panchakarma: c.panchakarma || [],
+                visitNumber: c.visitNumber || "1",
+                outcomeScore: c.outcomeScore || "No Improvement",
+                nextPlan: c.nextPlan || "Continue Same Treatment",
+                notes: c.notes || "",
+                doctorsNotes: c.doctorsNotes || ""
+              };
+              importedVisits.push(activeVisit);
+
+              if (Array.isArray(c.visits)) {
+                for (const hv of c.visits) {
+                  importedVisits.push({
+                    ...hv,
+                    patientId,
+                    status: hv.status || "completed"
+                  });
+                }
+              }
+            }
+
+            // Save migrated data to Firestore
+            for (const p of importedPatients.values()) {
+              await putItem("patients", p);
+            }
+            for (const v of importedVisits) {
+              await putItem("visits", v);
+            }
+            for (const r of importedRegistry) {
               await putItem("registry", r);
             }
-          }
-          // Insert queue
-          if (Array.isArray(data.queue)) {
-            for (const q of data.queue) {
-              await putItem("queue", q);
+            if (Array.isArray(data.queue)) {
+              for (const q of data.queue) {
+                await putItem("queue", q);
+              }
             }
           }
 
           // Reload React state from Firestore
-          const loadedCases = await getAllItems("cases");
-          loadedCases.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
-          setSavedCases(loadedCases);
+          const patientsList = await getAllItems("patients");
+          const visitsList = await getAllItems("visits");
+          
+          const patientVisitsMap = {};
+          visitsList.forEach(v => {
+            if (!patientVisitsMap[v.patientId] || new Date(v.visitDate) > new Date(patientVisitsMap[v.patientId].visitDate)) {
+              patientVisitsMap[v.patientId] = v;
+            }
+          });
+          
+          const combinedPatients = patientsList.map(patient => {
+            const lastVisit = patientVisitsMap[patient.patientId] || {};
+            return {
+              ...patient,
+              ...lastVisit
+            };
+          });
+          combinedPatients.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
+          setSavedCases(combinedPatients);
           
           const loadedQueue = await getAllItems("queue");
           setLiveQueue(loadedQueue);
+
+          // Update storage metrics to reflect the new state
+          const { getStorageMetrics } = await import("../lib/archiveService.js");
+          const m = await getStorageMetrics();
+          setStorageMetrics(m);
 
           triggerNotification("All database records restored successfully!");
           e.target.value = null; // reset input
@@ -1468,7 +1593,6 @@ export default function DbmsDashboard() {
           // Reset all local UI states
           setSavedCases([]);
           setLiveQueue([]);
-          setArchivedRecords([]);
           setCurrentCase({ ...DEFAULT_STATE });
 
           // Refresh storage metrics to reflect the empty database
@@ -1596,9 +1720,6 @@ export default function DbmsDashboard() {
       const { getStorageMetrics } = await import("../lib/archiveService.js");
       const m = await getStorageMetrics();
       setStorageMetrics(m);
-      
-      const archivesList = await getAllItems("archived_records");
-      setArchivedRecords(archivesList || []);
       
       // D. Re-fetch visits and patients to update savedCases
       const patientsListUpdated = await getAllItems("patients");

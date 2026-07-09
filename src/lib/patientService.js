@@ -1,4 +1,4 @@
-import { putItem, getAllItems } from "./db.js";
+import { getAllItems } from "./db.js";
 
 // Check if a patient already exists with the same phone and DOB
 export async function findDuplicatePatient(mobile, dob) {

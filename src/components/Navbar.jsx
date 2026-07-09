@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Leaf, Lock, ChevronDown, LogOut, LayoutDashboard } from "lucide-react";
@@ -7,14 +7,11 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const [doctorLogged, setDoctorLogged] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
   const dropdownRef = useRef(null);
 
-  useEffect(() => {
-    setDoctorLogged(localStorage.getItem("ayurkaya_doctor_logged_in") === "true");
-  }, [location]);
+  const doctorLogged = localStorage.getItem("ayurkaya_doctor_logged_in") === "true";
 
   // Click outside to close dropdown
   useEffect(() => {
@@ -31,7 +28,6 @@ export default function Navbar() {
 
   const handleLogout = () => {
     localStorage.removeItem("ayurkaya_doctor_logged_in");
-    setDoctorLogged(false);
     setIsProfileOpen(false);
     navigate("/");
   };
