@@ -83,6 +83,14 @@ export default function PatientHome() {
   const [time, setTime] = useState("");
   const [status, setStatus] = useState("");
 
+  // Local state for DOB text input masking/writing
+  const [dobInput, setDobInput] = useState("");
+
+  // Sync local dobInput when parent state loads/changes
+  useEffect(() => {
+    setDobInput(toDisplayDate(dob || ""));
+  }, [dob]);
+
   // Verification states for returning patients
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState("");
@@ -484,7 +492,7 @@ export default function PatientHome() {
                                   <input 
                                     type="text"
                                     placeholder="DD-MM-YYYY"
-                                    value={toDisplayDate(dob)}
+                                    value={dobInput}
                                     onChange={(e) => {
                                       let val = e.target.value.replace(/[^0-9-]/g, "");
                                       let digits = val.replace(/-/g, "");
@@ -496,6 +504,7 @@ export default function PatientHome() {
                                       if (e.nativeEvent.inputType === "deleteContentBackward" && val.endsWith("-")) {
                                         formatted = val;
                                       }
+                                      setDobInput(formatted);
                                       if (formatted.length === 10) {
                                         const parts = formatted.split("-");
                                         const d = parseInt(parts[0], 10);
@@ -506,14 +515,18 @@ export default function PatientHome() {
                                         today.setHours(0, 0, 0, 0);
                                         if (testDate.getDate() !== d || testDate.getMonth() !== m - 1 || testDate.getFullYear() !== y || testDate > today || y < 1900) {
                                           setVerificationError("Please enter a valid, non-future Date of Birth.");
+                                          setDobInput("");
                                           setDob("");
                                           setAge("");
                                           return;
                                         }
+                                        const isoVal = toIsoDate(formatted);
+                                        setDob(isoVal);
+                                        setAge(calculateAge(isoVal));
+                                      } else {
+                                        setDob("");
+                                        setAge("");
                                       }
-                                      const isoVal = toIsoDate(formatted);
-                                      setDob(isoVal);
-                                      setAge(calculateAge(isoVal));
                                     }}
                                     maxLength={10}
                                     className="w-full bg-brand-cream/15 border border-brand-primary/15 rounded-xl pl-4 pr-11 py-3 text-brand-dark focus:ring-2 focus:ring-brand-primary focus:border-brand-primary outline-none transition-all duration-150 font-mono"
@@ -597,7 +610,7 @@ export default function PatientHome() {
                                       type="text"
                                       disabled={!!verifiedPatient}
                                       placeholder="DD-MM-YYYY"
-                                      value={toDisplayDate(dob)}
+                                      value={dobInput}
                                       onChange={(e) => {
                                         let val = e.target.value.replace(/[^0-9-]/g, "");
                                         let digits = val.replace(/-/g, "");
@@ -609,6 +622,7 @@ export default function PatientHome() {
                                         if (e.nativeEvent.inputType === "deleteContentBackward" && val.endsWith("-")) {
                                           formatted = val;
                                         }
+                                        setDobInput(formatted);
                                         if (formatted.length === 10) {
                                           const parts = formatted.split("-");
                                           const d = parseInt(parts[0], 10);
@@ -619,14 +633,18 @@ export default function PatientHome() {
                                           today.setHours(0, 0, 0, 0);
                                           if (testDate.getDate() !== d || testDate.getMonth() !== m - 1 || testDate.getFullYear() !== y || testDate > today || y < 1900) {
                                             setVerificationError("Please enter a valid, non-future Date of Birth.");
+                                            setDobInput("");
                                             setDob("");
                                             setAge("");
                                             return;
                                           }
+                                          const isoVal = toIsoDate(formatted);
+                                          setDob(isoVal);
+                                          setAge(calculateAge(isoVal));
+                                        } else {
+                                          setDob("");
+                                          setAge("");
                                         }
-                                        const isoVal = toIsoDate(formatted);
-                                        setDob(isoVal);
-                                        setAge(calculateAge(isoVal));
                                       }}
                                       maxLength={10}
                                       className="w-full bg-brand-cream/15 disabled:bg-gray-100 border border-brand-primary/15 rounded-xl pl-4 pr-11 py-3 text-brand-dark focus:ring-2 focus:ring-brand-primary focus:border-brand-primary outline-none transition-all duration-150 font-mono"

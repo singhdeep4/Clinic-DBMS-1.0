@@ -234,6 +234,14 @@ export default function DbmsDashboard() {
   const [notification, setNotification] = useState("");
   const [showSidebar, setShowSidebar] = useState(window.innerWidth >= 1024);
 
+  // Local state for DOB text input masking/writing
+  const [dobInput, setDobInput] = useState("");
+
+  // Sync local dobInput when parent state loads/changes
+  useEffect(() => {
+    setDobInput(toDisplayDate(currentCase.dateOfBirth || ""));
+  }, [currentCase.dateOfBirth]);
+
   const closeSidebarOnMobile = () => {
     if (window.innerWidth < 1024) {
       setShowSidebar(false);
@@ -2395,7 +2403,7 @@ export default function DbmsDashboard() {
                             <input
                               type="text"
                               placeholder="DD-MM-YYYY"
-                              value={toDisplayDate(currentCase.dateOfBirth)}
+                              value={dobInput}
                               onChange={(e) => {
                                 let val = e.target.value.replace(/[^0-9-]/g, "");
                                 let digits = val.replace(/-/g, "");
@@ -2407,6 +2415,7 @@ export default function DbmsDashboard() {
                                 if (e.nativeEvent.inputType === "deleteContentBackward" && val.endsWith("-")) {
                                   formatted = val;
                                 }
+                                setDobInput(formatted);
                                 if (formatted.length === 10) {
                                   const parts = formatted.split("-");
                                   const d = parseInt(parts[0], 10);
@@ -2417,11 +2426,14 @@ export default function DbmsDashboard() {
                                   today.setHours(0, 0, 0, 0);
                                   if (testDate.getDate() !== d || testDate.getMonth() !== m - 1 || testDate.getFullYear() !== y || testDate > today || y < 1900) {
                                     triggerNotification("Please enter a valid, non-future Date of Birth.");
+                                    setDobInput("");
                                     handleTextChange("dateOfBirth", "");
                                     return;
                                   }
+                                  handleTextChange("dateOfBirth", toIsoDate(formatted));
+                                } else {
+                                  handleTextChange("dateOfBirth", "");
                                 }
-                                handleTextChange("dateOfBirth", toIsoDate(formatted));
                               }}
                               maxLength={10}
                               className="w-full bg-brand-beige border border-brand-light/50 pl-4 pr-11 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary font-mono"
