@@ -244,10 +244,23 @@ export default function DbmsDashboard() {
 
   // Local state for cloud database plan
   const [cloudPlan, setCloudPlan] = useState(() => localStorage.getItem("ayurkaya_cloud_plan") || "spark");
+  const [customLimitGB, setCustomLimitGB] = useState(() => parseFloat(localStorage.getItem("ayurkaya_custom_limit_gb")) || 5);
 
   const handlePlanChange = (plan) => {
     setCloudPlan(plan);
     localStorage.setItem("ayurkaya_cloud_plan", plan);
+  };
+
+  const handleCustomLimitChange = (val) => {
+    if (val === "") {
+      setCustomLimitGB("");
+      return;
+    }
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0) {
+      setCustomLimitGB(num);
+      localStorage.setItem("ayurkaya_custom_limit_gb", num);
+    }
   };
 
   const closeSidebarOnMobile = () => {
@@ -4300,17 +4313,33 @@ export default function DbmsDashboard() {
                     </div>
 
                     {/* Real-time Storage Utilization Progress Meter */}
-                    <div className="flex flex-col md:flex-row md:items-center justify-between border-t border-brand-light/35 pt-6 gap-6">
+                    <div className="flex flex-col md:flex-row md:items-start justify-between border-t border-brand-light/35 pt-6 gap-6">
                       <div className="space-y-1.5 shrink-0">
                         <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-widest">Cloud Database Plan</label>
                         <select
                           value={cloudPlan}
                           onChange={(e) => handlePlanChange(e.target.value)}
-                          className="bg-brand-beige border border-brand-light px-3 py-2 rounded-xl text-xs font-semibold text-brand-secondary focus:outline-none cursor-pointer"
+                          className="bg-brand-beige border border-brand-light px-3 py-2 rounded-xl text-xs font-semibold text-brand-secondary focus:outline-none cursor-pointer w-full md:w-auto"
                         >
                           <option value="spark">Spark Plan (1 GB Free Tier)</option>
                           <option value="blaze">Blaze Plan (Pay-As-You-Go / Scalable)</option>
+                          <option value="custom">Custom Limit...</option>
                         </select>
+                        {cloudPlan === "custom" && (
+                          <div className="flex items-center gap-2 mt-2 animate-fadeIn">
+                            <span className="text-[10px] font-bold text-brand-primary uppercase tracking-wider">Limit:</span>
+                            <input
+                              type="number"
+                              min="0.1"
+                              step="0.1"
+                              value={customLimitGB}
+                              onChange={(e) => handleCustomLimitChange(e.target.value)}
+                              className="w-20 bg-brand-beige border border-brand-light/70 px-2.5 py-1 rounded-lg text-xs font-mono focus:outline-none text-brand-secondary"
+                              placeholder="e.g. 5"
+                            />
+                            <span className="text-xs text-brand-dark/70 font-semibold">GB</span>
+                          </div>
+                        )}
                       </div>
                       <div className="flex-grow max-w-lg space-y-2">
                         {(() => {
@@ -4318,7 +4347,10 @@ export default function DbmsDashboard() {
                           const kb = bytes / 1024;
                           const mb = kb / 1024;
                           
-                          const limitMB = 1024; // 1 GB free limit
+                          let limitMB = 1024; // Default Spark 1 GB
+                          if (cloudPlan === "custom") {
+                            limitMB = (parseFloat(customLimitGB) || 5) * 1024;
+                          }
                           const percentage = Math.min((mb / limitMB) * 100, 100);
                           
                           return (
@@ -4327,11 +4359,13 @@ export default function DbmsDashboard() {
                                 <span>Storage Utilized:</span>
                                 <span className="font-mono text-xs">
                                   {mb < 0.1 ? `${kb.toFixed(2)} KB` : `${mb.toFixed(2)} MB`}
-                                  {cloudPlan === "spark" ? ` / ${limitMB} MB (${percentage.toFixed(4)}%)` : " (Unlimited Capacity)"}
+                                  {cloudPlan === "spark" ? ` / ${limitMB} MB (${percentage.toFixed(4)}%)` : ""}
+                                  {cloudPlan === "custom" ? ` / ${(limitMB / 1024).toFixed(1)} GB (${percentage.toFixed(4)}%)` : ""}
+                                  {cloudPlan === "blaze" ? " (Unlimited Capacity)" : ""}
                                 </span>
                               </div>
                               
-                              {cloudPlan === "spark" ? (
+                              {cloudPlan === "spark" || cloudPlan === "custom" ? (
                                 <div className="w-full h-3 bg-brand-beige rounded-full overflow-hidden border border-brand-light/50 relative">
                                   <div 
                                     className="h-full bg-brand-secondary transition-all duration-700 rounded-full" 
@@ -4348,9 +4382,9 @@ export default function DbmsDashboard() {
                               )}
                               
                               <p className="text-[10px] text-brand-dark/50 italic leading-snug">
-                                {cloudPlan === "spark" 
-                                  ? "On Spark plan, Firestore enforces a strict 1 GB limit. Use cleanup sweeper tools below to keep utilization low."
-                                  : "On Blaze plan, Firestore has no storage limit and auto-scales dynamically. The first 1 GB remains completely free."}
+                                {cloudPlan === "spark" && "On Spark plan, Firestore enforces a strict 1 GB limit. Use cleanup sweeper tools below to keep utilization low."}
+                                {cloudPlan === "blaze" && "On Blaze plan, Firestore has no storage limit and auto-scales dynamically. The first 1 GB remains completely free."}
+                                {cloudPlan === "custom" && `Custom limit set to ${(limitMB / 1024).toFixed(1)} GB. Progress bar tracks usage relative to your specified capacity threshold.`}
                               </p>
                             </div>
                           );
