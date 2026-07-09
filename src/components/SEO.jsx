@@ -3,7 +3,7 @@ import React, { useEffect } from "react";
 export default function SEO({ title, description, schema }) {
   useEffect(() => {
     // 1. Update Title
-    document.title = title ? `${title} | Ayurkaya Clinic` : "Ayurkaya | Premium Ayurvedic Clinic & Healing";
+    document.title = title ? `${title} | Ayurkaya Clinic` : "Ayurkaya | Premium Ayurvedic Clinic and Healing";
 
     // 2. Update Meta Description
     let metaDesc = document.querySelector('meta[name="description"]');

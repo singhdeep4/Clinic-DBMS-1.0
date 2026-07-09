@@ -10,8 +10,8 @@ import {
 const clinics = [
   {
     id: "aayushree",
-    name: "Aayushree Ayurved Polyclinic & Panchakarma Center",
-    address: `Shop No. 1 & 2, Shreeyash Building,\nBehind Link View Hotel,\nPandit Malharrao Kulkarni Road,\nBorivali (West), Mumbai – 400092, Maharashtra`,
+    name: "Aayushree Ayurved Polyclinic and Panchakarma Center",
+    address: `Shop No. 1 and 2, Shreeyash Building,\nBehind Link View Hotel,\nPandit Malharrao Kulkarni Road,\nBorivali (West), Mumbai – 400092, Maharashtra`,
     days: "Monday • Wednesday • Friday",
     times: ["19:00", "19:30", "20:00", "20:30"],
     contact: "+91 7021272264"
@@ -619,7 +619,7 @@ export default function PatientHome() {
                                 disabled={status === "Booking..."}
                                 className="flex-1 bg-brand-primary hover:bg-brand-secondary text-brand-beige py-3.5 rounded-xl font-semibold shadow-md hover:shadow-lg transition-all duration-150 cursor-pointer disabled:opacity-50 text-center"
                               >
-                                {status === "Booking..." ? "Booking Slot..." : "Confirm & Add to Walk-in List"}
+                                {status === "Booking..." ? "Booking Slot..." : "Confirm and Add to Walk-in List"}
                               </button>
                               <button 
                                 className="text-sm font-semibold text-brand-secondary hover:text-brand-primary px-3 py-2 transition-colors cursor-pointer" 

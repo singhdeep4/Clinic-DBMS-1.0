@@ -32,7 +32,7 @@ export default function Hero() {
             <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-extrabold text-brand-primary leading-tight">
               Holistic Healing <br />
               <span className="text-brand-secondary italic">For Your Mind, Body</span> <br />
-              & Soul
+              and Soul
             </h1>
 
             {/* Intro paragraph */}
@@ -99,7 +99,7 @@ export default function Hero() {
                 </div>
                 <div>
                   <h4 className="font-serif font-bold text-brand-primary text-sm leading-snug">Authentic Ayurvedic Therapies</h4>
-                  <p className="text-[11px] text-brand-dark/75 leading-relaxed font-sans">Using 100% natural herbs & organic oils.</p>
+                  <p className="text-[11px] text-brand-dark/75 leading-relaxed font-sans">Using 100% natural herbs and organic oils.</p>
                 </div>
               </div>
             </div>

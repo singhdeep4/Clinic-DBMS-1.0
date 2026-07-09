@@ -170,7 +170,7 @@ export default function Login() {
             Doctor Portal
           </h2>
           <p className="text-xs text-brand-dark/65 mt-1 font-sans">
-            Secure Access for Clinical Administration & Patient Records
+            Secure Access for Clinical Administration and Patient Records
           </p>
         </div>
 

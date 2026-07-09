@@ -1636,13 +1636,13 @@ export default function DbmsDashboard() {
 
   const wizardTabs = [
     { id: "profile", label: "Patient Profile" },
-    { id: "complaints", label: "Complaints & History" },
+    { id: "complaints", label: "Complaints and History" },
     { id: "core", label: "Ayur Core" },
     { id: "diagnosis", label: "Diagnosis" },
     { id: "lifestyle", label: "Lifestyle" },
     { id: "treatment", label: "Prescription" },
-    { id: "panchakarma", label: "Panchakarma & Advice" },
-    { id: "labs", label: "Labs & Follow-up" }
+    { id: "panchakarma", label: "Panchakarma and Advice" },
+    { id: "labs", label: "Labs and Follow-up" }
   ];
 
   const getNextTab = () => {
@@ -1808,10 +1808,10 @@ export default function DbmsDashboard() {
               </div>
             </div>
 
-            {/* General Vitals & Additional History */}
+            {/* General Vitals and Additional History */}
             <div className="border border-gray-100 p-4 rounded-xl space-y-2.5">
               <h5 className="font-serif text-xs font-bold uppercase tracking-wide text-emerald-900 border-b border-gray-200 pb-1">
-                Clinical Vitals & Medical History
+                Clinical Vitals and Medical History
               </h5>
               <div className="space-y-1.5 text-gray-800">
                 <p>
@@ -2485,7 +2485,7 @@ export default function DbmsDashboard() {
                       <div className="flex justify-between items-center border-b border-brand-light/40 pb-3 flex-wrap gap-3">
                         <div className="space-y-1">
                           <h3 className="font-serif text-lg font-bold text-brand-primary flex items-center gap-2">
-                            <Calendar size={18} /> Visit History & Consultation Timeline
+                            <Calendar size={18} /> Visit History and Consultation Timeline
                           </h3>
                           <p className="text-[10px] text-brand-dark/50">
                             Track patient progress across consult sheets and repeat prescriptions.
@@ -2774,10 +2774,10 @@ export default function DbmsDashboard() {
                     </div>
                   </div>
 
-                  {/* Surgical, Allergy & Other History */}
+                  {/* Surgical, Allergy and Other History */}
                   <div className="bg-brand-cream border border-brand-light/60 p-6 rounded-3xl space-y-4 shadow-sm">
                     <h4 className="font-serif text-lg font-bold text-brand-primary border-b border-brand-light/40 pb-2">
-                      Surgical, Allergy & Other History
+                      Surgical, Allergy and Other History
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="space-y-2">
@@ -3462,17 +3462,17 @@ export default function DbmsDashboard() {
                     </div>
                   </div>
 
-                  {/* Pathya-Apathya, Follow-up & Notes */}
+                  {/* Pathya-Apathya, Follow-up and Notes */}
                   <div className="bg-brand-cream border border-brand-light/60 p-6 rounded-3xl space-y-6 shadow-sm">
                     <h4 className="font-serif text-lg font-bold text-brand-primary border-b border-brand-light/40 pb-2">
-                      Pathya-Apathya, Follow-Up & Clinical Notes
+                      Pathya-Apathya, Follow-Up and Clinical Notes
                     </h4>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {/* Pathya-Apathya */}
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
-                          <label className="block text-xs font-bold text-brand-primary uppercase tracking-wider">Pathya – Apathya (Diet & Lifestyle Advice)</label>
+                          <label className="block text-xs font-bold text-brand-primary uppercase tracking-wider">Pathya – Apathya (Diet and Lifestyle Advice)</label>
                           <button
                             type="button"
                             onClick={() => {
@@ -3789,7 +3789,7 @@ export default function DbmsDashboard() {
                       className="flex items-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md cursor-pointer animate-pulse"
                       title="Save demographics and record follow-up"
                     >
-                      <Save size={14} /> Save & Record Follow-up
+                      <Save size={14} /> Save and Record Follow-up
                     </button>
                   )
                 )}
@@ -3965,15 +3965,15 @@ export default function DbmsDashboard() {
             </div>
           )}
 
-          {/* ==================== VIEW 3: ALERTS & FOLLOW-UPS ==================== */}
+          {/* ==================== VIEW 3: ALERTS and FOLLOW-UPS ==================== */}
           {viewMode === "followups" && (
             <div className="space-y-8 animate-fadeIn">
               
-              {/* Vitals & Lab Chemistry Alerts */}
+              {/* Vitals and Lab Chemistry Alerts */}
               <div className="bg-brand-cream border border-brand-light/60 p-6 rounded-3xl space-y-4 shadow-sm">
                 <h3 className="font-serif text-lg font-bold text-red-800 border-b border-brand-light/40 pb-2 flex items-center gap-2">
                   <AlertTriangle className="text-red-500 animate-pulse" size={20} />
-                  <span>Clinical Lab alerts & Borderline Vitals</span>
+                  <span>Clinical Lab alerts and Borderline Vitals</span>
                 </h3>
 
                 {alerts.length === 0 ? (
@@ -4081,7 +4081,7 @@ export default function DbmsDashboard() {
               <div className="border-b border-brand-light/45 pb-4 space-y-2">
                 <h3 className="font-serif text-2xl font-bold text-brand-primary flex items-center gap-2">
                   <Database size={24} className="text-brand-secondary" />
-                  <span>DBMS Backup, Restore & Clear Utilities</span>
+                  <span>DBMS Backup, Restore and Clear Utilities</span>
                 </h3>
                 <p className="text-xs text-brand-dark/70 font-sans leading-relaxed">
                   Your clinical records are now stored directly in Firestore. Backups are still recommended for offline recovery and export/import portability.
@@ -4170,12 +4170,12 @@ export default function DbmsDashboard() {
 
               </div>
 
-              {/* Data Storage & Archiving Management Section */}
+              {/* Data Storage and Archiving Management Section */}
               <div className="border-t border-brand-light/45 pt-8 space-y-6">
                 <div className="space-y-1">
                   <h3 className="font-serif text-xl font-bold text-brand-primary flex items-center gap-2">
                     <Database size={20} className="text-brand-secondary" />
-                    <span>Data Archiving & Storage Metrics</span>
+                    <span>Data Archiving and Storage Metrics</span>
                   </h3>
                   <p className="text-xs text-brand-dark/70 font-sans">
                     Keep database lightweight by moving old clinical records to archive storage. Restores are supported at any time.
@@ -4355,7 +4355,7 @@ export default function DbmsDashboard() {
               <div className="bg-brand-beige/40 border border-brand-light/45 p-4.5 rounded-2xl flex items-start space-x-3 text-xs text-brand-dark/85 leading-relaxed">
                 <Shield className="text-brand-secondary shrink-0 mt-0.5" size={16} />
                 <div>
-                    <strong>DBMS Security & Privacy Notice:</strong> All clinical records are saved directly to Firestore. Data is stored remotely in your configured Firebase project; export backups remain recommended for offline recovery.
+                    <strong>DBMS Security and Privacy Notice:</strong> All clinical records are saved directly to Firestore. Data is stored remotely in your configured Firebase project; export backups remain recommended for offline recovery.
             </div>
               </div>
             </div>
