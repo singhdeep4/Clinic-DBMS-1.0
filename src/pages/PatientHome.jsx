@@ -266,8 +266,9 @@ export default function PatientHome() {
               
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
                 <div className="space-y-3 max-w-xl">
-                  <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded bg-brand-light text-brand-primary text-xs font-semibold">
-                    🌿 {c.days}
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-light text-brand-primary text-xs font-semibold">
+                    <Calendar className="w-3.5 h-3.5 text-brand-accent shrink-0" />
+                    <span>Clinic Days: {c.days}</span>
                   </div>
                   <h2 className="font-serif font-semibold text-2xl text-brand-dark">{c.name}</h2>
                   <p className="text-sm leading-relaxed whitespace-pre-line text-brand-secondary/90">{c.address}</p>
