@@ -1,5 +1,5 @@
 import { startRealtimeListeners } from "../lib/realtime.js";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Lock, User, FileText, Activity, ShieldAlert, Heart, Plus, Trash2, 
@@ -196,9 +196,28 @@ const calculateAge = (dobString) => {
   return age >= 0 ? age.toString() : "";
 };
 
+const toDisplayDate = (isoString) => {
+  if (!isoString) return "";
+  const parts = isoString.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return isoString;
+};
+
+const toIsoDate = (displayString) => {
+  if (!displayString) return "";
+  const parts = displayString.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return "";
+};
+
 export default function DbmsDashboard() {
   const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const dobPickerRef = useRef(null);
   
   // Main view navigation: "clinical" | "analytics" | "followups" | "utilities"
   const [viewMode, setViewMode] = useState("clinical");
@@ -2372,12 +2391,69 @@ export default function DbmsDashboard() {
                           <label className="block text-xs font-bold text-brand-primary uppercase tracking-wider mb-2">
                             Date of Birth {!currentCase.patientId && <span className="text-red-500 font-bold">*</span>}
                           </label>
-                          <input
-                            type="date"
-                            value={currentCase.dateOfBirth || ""}
-                            onChange={(e) => handleTextChange("dateOfBirth", e.target.value)}
-                            className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
-                          />
+                          <div className="relative flex items-center">
+                            <input
+                              type="text"
+                              placeholder="DD-MM-YYYY"
+                              value={toDisplayDate(currentCase.dateOfBirth)}
+                              onChange={(e) => {
+                                let val = e.target.value.replace(/[^0-9-]/g, "");
+                                let digits = val.replace(/-/g, "");
+                                let formatted = "";
+                                if (digits.length > 0) formatted += digits.substring(0, 2);
+                                if (digits.length > 2) formatted += "-" + digits.substring(2, 4);
+                                if (digits.length > 4) formatted += "-" + digits.substring(4, 8);
+                                formatted = formatted.substring(0, 10);
+                                if (e.nativeEvent.inputType === "deleteContentBackward" && val.endsWith("-")) {
+                                  formatted = val;
+                                }
+                                if (formatted.length === 10) {
+                                  const parts = formatted.split("-");
+                                  const d = parseInt(parts[0], 10);
+                                  const m = parseInt(parts[1], 10);
+                                  const y = parseInt(parts[2], 10);
+                                  const testDate = new Date(y, m - 1, d);
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  if (testDate.getDate() !== d || testDate.getMonth() !== m - 1 || testDate.getFullYear() !== y || testDate > today || y < 1900) {
+                                    triggerNotification("Please enter a valid, non-future Date of Birth.");
+                                    handleTextChange("dateOfBirth", "");
+                                    return;
+                                  }
+                                }
+                                handleTextChange("dateOfBirth", toIsoDate(formatted));
+                              }}
+                              maxLength={10}
+                              className="w-full bg-brand-beige border border-brand-light/50 pl-4 pr-11 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => dobPickerRef.current && dobPickerRef.current.showPicker()}
+                              className="absolute right-3 p-1.5 hover:bg-brand-light/20 text-brand-primary rounded-lg transition-colors cursor-pointer"
+                              title="Open Calendar"
+                            >
+                              <Calendar size={16} />
+                            </button>
+                            <input
+                              type="date"
+                              ref={dobPickerRef}
+                              max={new Date().toISOString().split("T")[0]}
+                              value={currentCase.dateOfBirth || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val) {
+                                  const today = new Date().toISOString().split("T")[0];
+                                  if (val > today) {
+                                    triggerNotification("Please enter a valid, non-future Date of Birth.");
+                                    handleTextChange("dateOfBirth", "");
+                                  } else {
+                                    handleTextChange("dateOfBirth", val);
+                                  }
+                                }
+                              }}
+                              className="sr-only"
+                            />
+                          </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>

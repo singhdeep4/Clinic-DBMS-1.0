@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { putItem } from "../lib/db.js";
 import { findDuplicatePatient } from "../lib/patientService.js";
 import { motion, AnimatePresence } from "framer-motion";
@@ -47,8 +47,28 @@ const calculateAge = (dobString) => {
   return age >= 0 ? age.toString() : "";
 };
 
+const toDisplayDate = (isoString) => {
+  if (!isoString) return "";
+  const parts = isoString.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return isoString;
+};
+
+const toIsoDate = (displayString) => {
+  if (!displayString) return "";
+  const parts = displayString.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return "";
+};
+
 export default function PatientHome() {
   const [openClinic, setOpenClinic] = useState(null);
+  const firstDobPickerRef = useRef(null);
+  const returnDobPickerRef = useRef(null);
   
   // Form type: 'first' (New Patient) or 'returning' (Registered)
   const [visitType, setVisitType] = useState("first");
@@ -460,16 +480,74 @@ export default function PatientHome() {
                                 <label className="block text-sm font-semibold text-brand-dark mb-1.5 flex items-center gap-1.5">
                                   <Calendar className="w-4 h-4 text-brand-accent" /> Date of Birth
                                 </label>
-                                <input 
-                                  type="date"
-                                  className="w-full bg-brand-cream/15 border border-brand-primary/15 rounded-xl px-4 py-3 text-brand-dark focus:ring-2 focus:ring-brand-primary focus:border-brand-primary outline-none transition-all duration-150"
-                                  value={dob} 
-                                  onChange={e => {
-                                    const val = e.target.value;
-                                    setDob(val);
-                                    setAge(calculateAge(val));
-                                  }} 
-                                />
+                                <div className="relative flex items-center">
+                                  <input 
+                                    type="text"
+                                    placeholder="DD-MM-YYYY"
+                                    value={toDisplayDate(dob)}
+                                    onChange={(e) => {
+                                      let val = e.target.value.replace(/[^0-9-]/g, "");
+                                      let digits = val.replace(/-/g, "");
+                                      let formatted = "";
+                                      if (digits.length > 0) formatted += digits.substring(0, 2);
+                                      if (digits.length > 2) formatted += "-" + digits.substring(2, 4);
+                                      if (digits.length > 4) formatted += "-" + digits.substring(4, 8);
+                                      formatted = formatted.substring(0, 10);
+                                      if (e.nativeEvent.inputType === "deleteContentBackward" && val.endsWith("-")) {
+                                        formatted = val;
+                                      }
+                                      if (formatted.length === 10) {
+                                        const parts = formatted.split("-");
+                                        const d = parseInt(parts[0], 10);
+                                        const m = parseInt(parts[1], 10);
+                                        const y = parseInt(parts[2], 10);
+                                        const testDate = new Date(y, m - 1, d);
+                                        const today = new Date();
+                                        today.setHours(0, 0, 0, 0);
+                                        if (testDate.getDate() !== d || testDate.getMonth() !== m - 1 || testDate.getFullYear() !== y || testDate > today || y < 1900) {
+                                          setVerificationError("Please enter a valid, non-future Date of Birth.");
+                                          setDob("");
+                                          setAge("");
+                                          return;
+                                        }
+                                      }
+                                      const isoVal = toIsoDate(formatted);
+                                      setDob(isoVal);
+                                      setAge(calculateAge(isoVal));
+                                    }}
+                                    maxLength={10}
+                                    className="w-full bg-brand-cream/15 border border-brand-primary/15 rounded-xl pl-4 pr-11 py-3 text-brand-dark focus:ring-2 focus:ring-brand-primary focus:border-brand-primary outline-none transition-all duration-150 font-mono"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => firstDobPickerRef.current && firstDobPickerRef.current.showPicker()}
+                                    className="absolute right-3 p-1.5 hover:bg-brand-primary/10 text-brand-primary rounded-lg transition-colors cursor-pointer"
+                                    title="Open Calendar"
+                                  >
+                                    <Calendar className="w-4 h-4" />
+                                  </button>
+                                  <input 
+                                    type="date"
+                                    ref={firstDobPickerRef}
+                                    max={new Date().toISOString().split("T")[0]}
+                                    value={dob || ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (val) {
+                                        const today = new Date().toISOString().split("T")[0];
+                                        if (val > today) {
+                                          setVerificationError("Please enter a valid, non-future Date of Birth.");
+                                          setDob("");
+                                          setAge("");
+                                        } else {
+                                          setDob(val);
+                                          setAge(calculateAge(val));
+                                        }
+                                      }
+                                    }} 
+                                    className="sr-only"
+                                  />
+                                </div>
                               </div>
 
                               <div className="sm:col-span-2">
@@ -514,13 +592,77 @@ export default function PatientHome() {
                                   <label className="block text-sm font-semibold text-brand-dark mb-1.5 flex items-center gap-1.5">
                                     <Calendar className="w-4 h-4 text-brand-accent" /> Date of Birth
                                   </label>
-                                  <input 
-                                    type="date"
-                                    disabled={!!verifiedPatient}
-                                    className="w-full bg-brand-cream/15 disabled:bg-gray-100 border border-brand-primary/15 rounded-xl px-4 py-3 text-brand-dark focus:ring-2 focus:ring-brand-primary focus:border-brand-primary outline-none transition-all duration-150"
-                                    value={dob} 
-                                    onChange={e => setDob(e.target.value)} 
-                                  />
+                                  <div className="relative flex items-center">
+                                    <input 
+                                      type="text"
+                                      disabled={!!verifiedPatient}
+                                      placeholder="DD-MM-YYYY"
+                                      value={toDisplayDate(dob)}
+                                      onChange={(e) => {
+                                        let val = e.target.value.replace(/[^0-9-]/g, "");
+                                        let digits = val.replace(/-/g, "");
+                                        let formatted = "";
+                                        if (digits.length > 0) formatted += digits.substring(0, 2);
+                                        if (digits.length > 2) formatted += "-" + digits.substring(2, 4);
+                                        if (digits.length > 4) formatted += "-" + digits.substring(4, 8);
+                                        formatted = formatted.substring(0, 10);
+                                        if (e.nativeEvent.inputType === "deleteContentBackward" && val.endsWith("-")) {
+                                          formatted = val;
+                                        }
+                                        if (formatted.length === 10) {
+                                          const parts = formatted.split("-");
+                                          const d = parseInt(parts[0], 10);
+                                          const m = parseInt(parts[1], 10);
+                                          const y = parseInt(parts[2], 10);
+                                          const testDate = new Date(y, m - 1, d);
+                                          const today = new Date();
+                                          today.setHours(0, 0, 0, 0);
+                                          if (testDate.getDate() !== d || testDate.getMonth() !== m - 1 || testDate.getFullYear() !== y || testDate > today || y < 1900) {
+                                            setVerificationError("Please enter a valid, non-future Date of Birth.");
+                                            setDob("");
+                                            setAge("");
+                                            return;
+                                          }
+                                        }
+                                        const isoVal = toIsoDate(formatted);
+                                        setDob(isoVal);
+                                        setAge(calculateAge(isoVal));
+                                      }}
+                                      maxLength={10}
+                                      className="w-full bg-brand-cream/15 disabled:bg-gray-100 border border-brand-primary/15 rounded-xl pl-4 pr-11 py-3 text-brand-dark focus:ring-2 focus:ring-brand-primary focus:border-brand-primary outline-none transition-all duration-150 font-mono"
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={!!verifiedPatient}
+                                      onClick={() => returnDobPickerRef.current && returnDobPickerRef.current.showPicker()}
+                                      className="absolute right-3 p-1.5 hover:bg-brand-primary/10 text-brand-primary rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                                      title="Open Calendar"
+                                    >
+                                      <Calendar className="w-4 h-4" />
+                                    </button>
+                                    <input 
+                                      type="date"
+                                      ref={returnDobPickerRef}
+                                      disabled={!!verifiedPatient}
+                                      max={new Date().toISOString().split("T")[0]}
+                                      value={dob || ""}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val) {
+                                          const today = new Date().toISOString().split("T")[0];
+                                          if (val > today) {
+                                            setVerificationError("Please enter a valid, non-future Date of Birth.");
+                                            setDob("");
+                                            setAge("");
+                                          } else {
+                                            setDob(val);
+                                            setAge(calculateAge(val));
+                                          }
+                                        }
+                                      }} 
+                                      className="sr-only"
+                                    />
+                                  </div>
                                 </div>
                               </div>
 
