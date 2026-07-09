@@ -121,6 +121,59 @@ export async function restoreArchivedVisit(archiveId) {
   }
 }
 
+// Official Google Cloud Firestore Billing specification for document storage calculation
+export function calculateFirestoreDocSize(item, collectionName, docId) {
+  if (!item) return 0;
+  
+  // Base document cost (32 bytes) + Document name (database ID '(default)' (9 bytes) + path size + 16 bytes)
+  const dbIdSize = 9;
+  const pathSize = (collectionName || "").length + 1 + (docId || "").length;
+  let totalBytes = dbIdSize + pathSize + 16 + 32;
+
+  function calculateValueSize(val) {
+    if (val === null || val === undefined) return 1;
+    if (typeof val === "boolean") return 1;
+    if (typeof val === "number") return 8;
+    if (typeof val === "string") {
+      return new TextEncoder().encode(val).length + 1;
+    }
+    if (val instanceof Date) return 8;
+    // Check if timestamp (like Firestore Timestamp { seconds, nanoseconds })
+    if (val && typeof val === "object" && "seconds" in val && "nanoseconds" in val) {
+      return 8;
+    }
+    if (Array.isArray(val)) {
+      let arraySize = 0;
+      val.forEach(member => {
+        arraySize += calculateValueSize(member);
+      });
+      return arraySize;
+    }
+    if (typeof val === "object") {
+      // Map size: 32 bytes + sum of key-value pairs
+      let mapSize = 32;
+      for (const key in val) {
+        if (Object.prototype.hasOwnProperty.call(val, key)) {
+          const keySize = new TextEncoder().encode(key).length + 1;
+          mapSize += keySize + calculateValueSize(val[key]);
+        }
+      }
+      return mapSize;
+    }
+    return 0;
+  }
+
+  // Calculate fields size (excluding the client-only 'id' attribute)
+  for (const key in item) {
+    if (Object.prototype.hasOwnProperty.call(item, key) && key !== "id") {
+      const keySize = new TextEncoder().encode(key).length + 1;
+      totalBytes += keySize + calculateValueSize(item[key]);
+    }
+  }
+
+  return totalBytes;
+}
+
 // Get metrics about current database storage utilization
 export async function getStorageMetrics() {
   try {
@@ -128,6 +181,7 @@ export async function getStorageMetrics() {
     const visits = await getAllItems("visits");
     const archives = await getAllItems("archived_records").catch(() => []);
     const queue = await getAllItems("queue");
+    const registry = await getAllItems("registry").catch(() => []);
     
     // Group active/warm visits
     const thresholdDate = new Date();
@@ -145,12 +199,13 @@ export async function getStorageMetrics() {
       }
     });
     
-    // Calculate size in bytes
+    // Calculate 100% accurate size in bytes based on official Firestore formula
     let totalBytes = 0;
-    patients.forEach(p => { totalBytes += JSON.stringify(p).length; });
-    visits.forEach(v => { totalBytes += JSON.stringify(v).length; });
-    archives.forEach(a => { totalBytes += JSON.stringify(a).length; });
-    queue.forEach(q => { totalBytes += JSON.stringify(q).length; });
+    patients.forEach(p => { totalBytes += calculateFirestoreDocSize(p, "patients", p.id); });
+    visits.forEach(v => { totalBytes += calculateFirestoreDocSize(v, "visits", v.id); });
+    archives.forEach(a => { totalBytes += calculateFirestoreDocSize(a, "archived_records", a.id); });
+    queue.forEach(q => { totalBytes += calculateFirestoreDocSize(q, "queue", q.id); });
+    registry.forEach(r => { totalBytes += calculateFirestoreDocSize(r, "registry", r.id); });
     
     return {
       totalPatients: patients.length,
