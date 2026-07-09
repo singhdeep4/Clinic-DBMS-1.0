@@ -355,11 +355,11 @@ export default function PatientHome() {
               <AnimatePresence>
                 {openClinic === c.id && (
                   <motion.div 
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
+                    initial={{ height: 0, opacity: 0, overflow: "hidden" }}
+                    animate={{ height: "auto", opacity: 1, transitionEnd: { overflow: "visible" } }}
+                    exit={{ height: 0, opacity: 0, overflow: "hidden" }}
                     transition={{ duration: 0.35, ease: "easeInOut" }}
-                    className="overflow-hidden border-t border-brand-primary/10 mt-6 pt-6 relative z-10"
+                    className="border-t border-brand-primary/10 mt-6 pt-6 relative z-10"
                   >
                     {status === "success" ? (
                       <motion.div 
