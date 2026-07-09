@@ -145,12 +145,20 @@ export async function getStorageMetrics() {
       }
     });
     
+    // Calculate size in bytes
+    let totalBytes = 0;
+    patients.forEach(p => { totalBytes += JSON.stringify(p).length; });
+    visits.forEach(v => { totalBytes += JSON.stringify(v).length; });
+    archives.forEach(a => { totalBytes += JSON.stringify(a).length; });
+    queue.forEach(q => { totalBytes += JSON.stringify(q).length; });
+    
     return {
       totalPatients: patients.length,
       activeVisits: activeVisitsCount,
       warmVisits: warmVisitsCount,
       archivedVisits: archives.length,
-      queueItems: queue.length
+      queueItems: queue.length,
+      totalBytes
     };
   } catch (err) {
     console.error("Error getting storage metrics:", err);

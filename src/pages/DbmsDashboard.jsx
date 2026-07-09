@@ -242,6 +242,14 @@ export default function DbmsDashboard() {
     setDobInput(toDisplayDate(currentCase.dateOfBirth || ""));
   }, [currentCase.dateOfBirth]);
 
+  // Local state for cloud database plan
+  const [cloudPlan, setCloudPlan] = useState(() => localStorage.getItem("ayurkaya_cloud_plan") || "spark");
+
+  const handlePlanChange = (plan) => {
+    setCloudPlan(plan);
+    localStorage.setItem("ayurkaya_cloud_plan", plan);
+  };
+
   const closeSidebarOnMobile = () => {
     if (window.innerWidth < 1024) {
       setShowSidebar(false);
@@ -4271,22 +4279,83 @@ export default function DbmsDashboard() {
                 </div>
 
                 {storageMetrics && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
-                      <div className="text-2xl font-bold text-brand-primary font-mono">{storageMetrics.totalPatients}</div>
-                      <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Total Patients</div>
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
+                        <div className="text-2xl font-bold text-brand-primary font-mono">{storageMetrics.totalPatients}</div>
+                        <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Total Patients</div>
+                      </div>
+                      <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
+                        <div className="text-2xl font-bold text-emerald-700 font-mono">{storageMetrics.activeVisits}</div>
+                        <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Active Visits (&lt;6m)</div>
+                      </div>
+                      <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
+                        <div className="text-2xl font-bold text-amber-700 font-mono">{storageMetrics.warmVisits}</div>
+                        <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Warm Visits (&gt;6m)</div>
+                      </div>
+                      <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
+                        <div className="text-2xl font-bold text-brand-secondary font-mono">{storageMetrics.archivedVisits}</div>
+                        <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Archived Visits (&gt;1yr)</div>
+                      </div>
                     </div>
-                    <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
-                      <div className="text-2xl font-bold text-emerald-700 font-mono">{storageMetrics.activeVisits}</div>
-                      <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Active Visits (&lt;6m)</div>
-                    </div>
-                    <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
-                      <div className="text-2xl font-bold text-amber-700 font-mono">{storageMetrics.warmVisits}</div>
-                      <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Warm Visits (&gt;6m)</div>
-                    </div>
-                    <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
-                      <div className="text-2xl font-bold text-brand-secondary font-mono">{storageMetrics.archivedVisits}</div>
-                      <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Archived Visits (&gt;1yr)</div>
+
+                    {/* Real-time Storage Utilization Progress Meter */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between border-t border-brand-light/35 pt-6 gap-6">
+                      <div className="space-y-1.5 shrink-0">
+                        <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-widest">Cloud Database Plan</label>
+                        <select
+                          value={cloudPlan}
+                          onChange={(e) => handlePlanChange(e.target.value)}
+                          className="bg-brand-beige border border-brand-light px-3 py-2 rounded-xl text-xs font-semibold text-brand-secondary focus:outline-none cursor-pointer"
+                        >
+                          <option value="spark">Spark Plan (1 GB Free Tier)</option>
+                          <option value="blaze">Blaze Plan (Pay-As-You-Go / Scalable)</option>
+                        </select>
+                      </div>
+                      <div className="flex-grow max-w-lg space-y-2">
+                        {(() => {
+                          const bytes = storageMetrics.totalBytes || 0;
+                          const kb = bytes / 1024;
+                          const mb = kb / 1024;
+                          
+                          const limitMB = 1024; // 1 GB free limit
+                          const percentage = Math.min((mb / limitMB) * 100, 100);
+                          
+                          return (
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-xs font-semibold text-brand-dark/80">
+                                <span>Storage Utilized:</span>
+                                <span className="font-mono text-xs">
+                                  {mb < 0.1 ? `${kb.toFixed(2)} KB` : `${mb.toFixed(2)} MB`}
+                                  {cloudPlan === "spark" ? ` / ${limitMB} MB (${percentage.toFixed(4)}%)` : " (Unlimited Capacity)"}
+                                </span>
+                              </div>
+                              
+                              {cloudPlan === "spark" ? (
+                                <div className="w-full h-3 bg-brand-beige rounded-full overflow-hidden border border-brand-light/50 relative">
+                                  <div 
+                                    className="h-full bg-brand-secondary transition-all duration-700 rounded-full" 
+                                    style={{ width: `${Math.max(percentage, 1.5)}%` }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="w-full h-4.5 bg-brand-beige rounded-full overflow-hidden border border-brand-light/50 relative flex items-center justify-center">
+                                  <div 
+                                    className="h-full bg-emerald-600 transition-all duration-700 rounded-full w-full opacity-20" 
+                                  />
+                                  <span className="absolute text-[8px] text-emerald-950 font-bold uppercase tracking-widest select-none">Auto-scaling Active (Infinite)</span>
+                                </div>
+                              )}
+                              
+                              <p className="text-[10px] text-brand-dark/50 italic leading-snug">
+                                {cloudPlan === "spark" 
+                                  ? "On Spark plan, Firestore enforces a strict 1 GB limit. Use cleanup sweeper tools below to keep utilization low."
+                                  : "On Blaze plan, Firestore has no storage limit and auto-scales dynamically. The first 1 GB remains completely free."}
+                              </p>
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
                 )}
