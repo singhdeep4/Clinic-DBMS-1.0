@@ -34,6 +34,19 @@ const clinics = [
   }
 ];
 
+const calculateAge = (dobString) => {
+  if (!dobString) return "";
+  const birthDate = new Date(dobString);
+  if (isNaN(birthDate.getTime())) return "";
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age.toString() : "";
+};
+
 export default function PatientHome() {
   const [openClinic, setOpenClinic] = useState(null);
   
@@ -128,10 +141,10 @@ export default function PatientHome() {
     if (visitType === "first") {
       // New Patient validations
       if (!name.trim()) return setStatus("Please enter your name.");
-      if (!age || isNaN(age) || parseInt(age, 10) <= 0) return setStatus("Please enter a valid age.");
+      if (!dob) return setStatus("Please select your date of birth.");
+      if (!age || isNaN(age) || parseInt(age, 10) <= 0) return setStatus("Please enter a valid date of birth.");
       if (!gender) return setStatus("Please select your gender.");
       if (!mobile.trim() || mobile.replace(/[^0-9]/g, "").length < 10) return setStatus("Please enter a valid 10-digit mobile number.");
-      if (!dob) return setStatus("Please select your date of birth.");
 
       setStatus("Checking registrations...");
       // Check if they are actually a returning patient trying to register again
@@ -430,17 +443,6 @@ export default function PatientHome() {
                               </div>
 
                               <div>
-                                <label className="block text-sm font-semibold text-brand-dark mb-1.5">Age</label>
-                                <input 
-                                  type="number"
-                                  className="w-full bg-brand-cream/15 border border-brand-primary/15 rounded-xl px-4 py-3 text-brand-dark focus:ring-2 focus:ring-brand-primary focus:border-brand-primary outline-none transition-all duration-150"
-                                  value={age} 
-                                  onChange={e => setAge(e.target.value)} 
-                                  placeholder="Years" 
-                                />
-                              </div>
-
-                              <div>
                                 <label className="block text-sm font-semibold text-brand-dark mb-1.5">Gender</label>
                                 <select 
                                   className="w-full bg-brand-cream/15 border border-brand-primary/15 rounded-xl px-4 py-3 text-brand-dark focus:ring-2 focus:ring-brand-primary focus:border-brand-primary outline-none transition-all duration-150"
@@ -455,6 +457,22 @@ export default function PatientHome() {
 
                               <div>
                                 <label className="block text-sm font-semibold text-brand-dark mb-1.5 flex items-center gap-1.5">
+                                  <Calendar className="w-4 h-4 text-brand-accent" /> Date of Birth
+                                </label>
+                                <input 
+                                  type="date"
+                                  className="w-full bg-brand-cream/15 border border-brand-primary/15 rounded-xl px-4 py-3 text-brand-dark focus:ring-2 focus:ring-brand-primary focus:border-brand-primary outline-none transition-all duration-150"
+                                  value={dob} 
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setDob(val);
+                                    setAge(calculateAge(val));
+                                  }} 
+                                />
+                              </div>
+
+                              <div className="sm:col-span-2">
+                                <label className="block text-sm font-semibold text-brand-dark mb-1.5 flex items-center gap-1.5">
                                   <Phone className="w-4 h-4 text-brand-accent" /> Mobile Number
                                 </label>
                                 <input 
@@ -463,18 +481,6 @@ export default function PatientHome() {
                                   value={mobile} 
                                   onChange={e => setMobile(e.target.value)} 
                                   placeholder="10-digit mobile" 
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-sm font-semibold text-brand-dark mb-1.5 flex items-center gap-1.5">
-                                  <Calendar className="w-4 h-4 text-brand-accent" /> Date of Birth
-                                </label>
-                                <input 
-                                  type="date"
-                                  className="w-full bg-brand-cream/15 border border-brand-primary/15 rounded-xl px-4 py-3 text-brand-dark focus:ring-2 focus:ring-brand-primary focus:border-brand-primary outline-none transition-all duration-150"
-                                  value={dob} 
-                                  onChange={e => setDob(e.target.value)} 
                                 />
                               </div>
                             </motion.div>
