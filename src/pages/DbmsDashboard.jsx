@@ -254,6 +254,95 @@ export default function DbmsDashboard() {
   // State for historical visit purging threshold (1m, 3m, 6m, 9m, 1y)
   const [cleanupThreshold, setCleanupThreshold] = useState("6m");
 
+  // Inactive patient profile purging states (6m, 9m, 1y, 2y)
+  const [inactiveFilter, setInactiveFilter] = useState("6m");
+  const [selectedInactiveIds, setSelectedInactiveIds] = useState([]);
+
+  // Calculate duration of patient inactivity based on selected filter threshold
+  const getInactivePatients = () => {
+    const threshold = new Date();
+    if (inactiveFilter === "6m") {
+      threshold.setDate(threshold.getDate() - 180);
+    } else if (inactiveFilter === "9m") {
+      threshold.setDate(threshold.getDate() - 270);
+    } else if (inactiveFilter === "1y") {
+      threshold.setFullYear(threshold.getFullYear() - 1);
+    } else if (inactiveFilter === "2y") {
+      threshold.setFullYear(threshold.getFullYear() - 2);
+    }
+    return savedCases.filter(c => c.visitDate && new Date(c.visitDate) < threshold);
+  };
+
+  const deleteInactivePatients = async (patientIdsToPurge) => {
+    if (patientIdsToPurge.length === 0) return;
+    const count = patientIdsToPurge.length;
+    if (!window.confirm(`Are you absolutely sure you want to permanently delete the profile card and all visit logs for these ${count} patient(s)?\n\nThis will permanently wipe their basic details, booking registry, and all clinical records from the cloud. This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      const { collection, getDocs, query, where } = await import("firebase/firestore");
+      const { db: fdb } = await import("../lib/firebase.js");
+      for (const id of patientIdsToPurge) {
+        await deleteItem("patients", id);
+        await deleteItem("registry", id);
+        const visitsQuery = query(collection(fdb, "visits"), where("patientId", "==", id));
+        const visitsSnapshot = await getDocs(visitsQuery);
+        const deleteVisitsPromises = visitsSnapshot.docs.map(doc => deleteItem("visits", doc.id));
+        await Promise.all(deleteVisitsPromises);
+        const queueQuery = query(collection(fdb, "queue"), where("patientId", "==", id));
+        const queueSnapshot = await getDocs(queueQuery);
+        const deleteQueuePromises = queueSnapshot.docs.map(doc => deleteItem("queue", doc.id));
+        await Promise.all(deleteQueuePromises);
+        const archivesQuery = query(collection(fdb, "archived_records"), where("patientId", "==", id));
+        const archivesSnapshot = await getDocs(archivesQuery);
+        const deleteArchivedPromises = archivesSnapshot.docs.map(doc => deleteItem("archived_records", doc.id));
+        await Promise.all(deleteArchivedPromises);
+      }
+      triggerNotification(`Successfully deleted ${count} patient profile(s) and all their medical records.`);
+      setSelectedInactiveIds([]);
+      const { getStorageMetrics } = await import("../lib/archiveService.js");
+      const m = await getStorageMetrics();
+      setStorageMetrics(m);
+      const patientsListUpdated = await getAllItems("patients");
+      const visitsUpdated = await getAllItems("visits");
+      const patientVisitsMap = {};
+      visitsUpdated.forEach(v => {
+        if (!patientVisitsMap[v.patientId] || new Date(v.visitDate) > new Date(patientVisitsMap[v.patientId].visitDate)) {
+          patientVisitsMap[v.patientId] = v;
+        }
+      });
+      const combinedPatients = patientsListUpdated.map(p => {
+        const latestVisit = patientVisitsMap[p.patientId];
+        if (latestVisit) {
+          return {
+            ...p,
+            visitDate: latestVisit.visitDate,
+            complaints: latestVisit.chiefComplaints || latestVisit.complaints || [],
+            labTests: latestVisit.labTests || [],
+            outcomeScore: latestVisit.outcomeScore || "No Improvement",
+            prakriti: latestVisit.prakriti || p.prakriti || "Vata-Pitta",
+            agni: latestVisit.agni || "Sama",
+            mala: latestVisit.mala || "Regular",
+            medicines: latestVisit.medicines || [],
+            nextFollowUp: latestVisit.nextFollowUp || "15 Days"
+          };
+        }
+        return {
+          ...p,
+          visitDate: p.createdAt || p.updatedAt
+        };
+      });
+      combinedPatients.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
+      setSavedCases(combinedPatients);
+      if (patientIdsToPurge.includes(currentCase.patientId)) {
+        setCurrentCase({ ...DEFAULT_STATE });
+      }
+    } catch (err) {
+      console.error("Purging inactive patients failed:", err);
+      triggerNotification("Failed to delete inactive patients.");
+    }
+  };
+
   const handleCustomLimitChange = (val) => {
     if (val === "") {
       setCustomLimitGB("");
@@ -4330,22 +4419,18 @@ export default function DbmsDashboard() {
 
                 {storageMetrics && (
                   <div className="space-y-6">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
                         <div className="text-2xl font-bold text-brand-primary font-mono">{storageMetrics.totalPatients}</div>
                         <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Total Patients</div>
                       </div>
                       <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
                         <div className="text-2xl font-bold text-emerald-700 font-mono">{storageMetrics.activeVisits}</div>
-                        <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Active Visits (&lt;6m)</div>
+                        <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Active Visits (&lt;6M)</div>
                       </div>
                       <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
                         <div className="text-2xl font-bold text-amber-700 font-mono">{storageMetrics.warmVisits}</div>
-                        <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Warm Visits (&gt;6m)</div>
-                      </div>
-                      <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
-                        <div className="text-2xl font-bold text-brand-secondary font-mono">{storageMetrics.archivedVisits}</div>
-                        <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Archived Visits (&gt;1yr)</div>
+                        <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Older Visits (&gt;6M)</div>
                       </div>
                     </div>
 
@@ -4431,151 +4516,123 @@ export default function DbmsDashboard() {
                   </div>
                 )}
 
-                <div className="flex flex-wrap gap-4">
-                  <button
-                    onClick={async () => {
-                      if (window.confirm("Are you sure you want to run the archival sweep? This will archive all visits older than 1 year.")) {
-                        try {
-                          const { runArchivalSweep } = await import("../lib/archiveService.js");
-                          const result = await runArchivalSweep();
-                          if (result.success) {
-                            triggerNotification(`Archival sweep finished. Archived ${result.archivedCount} visits.`);
-                            // Refresh metrics
-                            const { getStorageMetrics } = await import("../lib/archiveService.js");
-                            const m = await getStorageMetrics();
-                            setStorageMetrics(m);
-                            const archivesList = await getAllItems("archived_records");
-                            setArchivedRecords(archivesList || []);
-                            
-                            // Also refresh savedCases listing
-                            const patientsList = await getAllItems("patients");
-                            const visits = await getAllItems("visits");
-                            const patientVisitsMap = {};
-                            visits.forEach(v => {
-                              if (!patientVisitsMap[v.patientId] || new Date(v.visitDate) > new Date(patientVisitsMap[v.patientId].visitDate)) {
-                                patientVisitsMap[v.patientId] = v;
-                              }
-                            });
-                            const combinedPatients = patientsList.map(p => {
-                              const latestVisit = patientVisitsMap[p.patientId];
-                              if (latestVisit) {
-                                return {
-                                  ...p,
-                                  visitDate: latestVisit.visitDate,
-                                  complaints: latestVisit.chiefComplaints || latestVisit.complaints || [],
-                                  labTests: latestVisit.labTests || [],
-                                  outcomeScore: latestVisit.outcomeScore || "No Improvement",
-                                  prakriti: latestVisit.prakriti || p.prakriti || "Vata-Pitta",
-                                  agni: latestVisit.agni || "Sama",
-                                  mala: latestVisit.mala || "Regular",
-                                  medicines: latestVisit.medicines || [],
-                                  nextFollowUp: latestVisit.nextFollowUp || "15 Days"
-                                };
-                              }
-                              return {
-                                ...p,
-                                visitDate: p.createdAt || p.updatedAt
-                              };
-                            });
-                            combinedPatients.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
-                            setSavedCases(combinedPatients);
-                          } else {
-                            triggerNotification("Archival sweep failed: " + result.error);
-                          }
-                        } catch (err) {
-                          console.error(err);
-                          triggerNotification("Error running archival sweep.");
-                        }
-                      }
-                    }}
-                    className="bg-brand-primary text-brand-beige hover:bg-brand-secondary px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
-                  >
-                    Run Archival Sweep (1-Year Policy)
-                  </button>
-                </div>
 
-                <div className="bg-white border border-brand-light/35 rounded-2xl overflow-hidden shadow-sm">
-                  <div className="bg-brand-light/10 px-5 py-3 border-b border-brand-light/35 flex justify-between items-center">
-                    <span className="font-serif font-bold text-xs text-brand-primary uppercase tracking-wider">Archived Visits List</span>
-                    <span className="text-[10px] text-brand-dark/60 font-mono">{archivedRecords.length} records</span>
+                {/* Inactive Patient Purge Panel */}
+                <div className="bg-white border border-brand-light/35 rounded-2xl overflow-hidden shadow-sm space-y-4 p-5">
+                  <div className="flex justify-between items-center flex-wrap gap-3 pb-3 border-b border-brand-light/35">
+                    <div className="space-y-1">
+                      <span className="font-serif font-bold text-xs text-brand-primary uppercase tracking-wider block">Inactive Patient Profile Purge</span>
+                      <span className="text-[10px] text-brand-dark/60 font-sans">Delete inactive patients completely (demographics and visits) to free up storage.</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <select
+                        value={inactiveFilter}
+                        onChange={(e) => {
+                          setInactiveFilter(e.target.value);
+                          setSelectedInactiveIds([]);
+                        }}
+                        className="bg-brand-beige border border-brand-light px-2.5 py-1.5 rounded-lg text-xs font-semibold text-brand-secondary focus:outline-none cursor-pointer"
+                      >
+                        <option value="6m">Inactive for +6 Months</option>
+                        <option value="9m">Inactive for +9 Months</option>
+                        <option value="1y">Inactive for +1 Year</option>
+                        <option value="2y">Inactive for +2 Years</option>
+                      </select>
+
+                      {selectedInactiveIds.length > 0 && (
+                        <button
+                          onClick={() => deleteInactivePatients(selectedInactiveIds)}
+                          className="bg-red-700 text-brand-beige hover:bg-red-800 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Trash2 size={13} /> Delete Selected ({selectedInactiveIds.length})
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="divide-y divide-brand-light/25 max-h-[300px] overflow-y-auto">
-                    {archivedRecords.length === 0 ? (
-                      <div className="p-6 text-center text-xs text-brand-dark/50 font-sans">
-                        No archived records in database.
-                      </div>
-                    ) : (
-                      archivedRecords.map((item) => (
-                        <div key={item.archiveId} className="px-5 py-3 flex justify-between items-center text-xs hover:bg-brand-cream/35 transition-colors">
-                          <div className="space-y-1">
-                            <div className="font-bold text-brand-primary">{item.data?.name || "Unknown Patient"} ({item.patientId})</div>
-                            <div className="text-[10px] text-brand-dark/70 font-sans">
-                              Visit Date: {new Date(item.data?.visitDate).toLocaleDateString()} • Archived: {new Date(item.archivedAt).toLocaleDateString()}
-                            </div>
+
+                  {(() => {
+                    const inactiveList = getInactivePatients();
+                    return (
+                      <div className="divide-y divide-brand-light/25 max-h-[350px] overflow-y-auto">
+                        {inactiveList.length === 0 ? (
+                          <div className="p-8 text-center text-xs text-brand-dark/50 font-sans">
+                            No inactive patients found matching this threshold.
                           </div>
-                          <button
-                            onClick={async () => {
-                              if (window.confirm("Restore this archived visit back to active records?")) {
-                                try {
-                                  const { restoreArchivedVisit } = await import("../lib/archiveService.js");
-                                  const result = await restoreArchivedVisit(item.archiveId);
-                                  if (result.success) {
-                                    triggerNotification("Visit restored successfully.");
-                                    // Refresh metrics & list
-                                    const { getStorageMetrics } = await import("../lib/archiveService.js");
-                                    const m = await getStorageMetrics();
-                                    setStorageMetrics(m);
-                                    const archivesList = await getAllItems("archived_records");
-                                    setArchivedRecords(archivesList || []);
-                                    // Also refresh savedCases listing
-                                    const patientsList = await getAllItems("patients");
-                                    const visits = await getAllItems("visits");
-                                    const patientVisitsMap = {};
-                                    visits.forEach(v => {
-                                      if (!patientVisitsMap[v.patientId] || new Date(v.visitDate) > new Date(patientVisitsMap[v.patientId].visitDate)) {
-                                        patientVisitsMap[v.patientId] = v;
+                        ) : (
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="text-brand-primary border-b border-brand-light/35 select-none bg-brand-light/5 text-[10px] font-bold uppercase tracking-wider">
+                                <th className="p-2 w-8 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedInactiveIds.length === inactiveList.length}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedInactiveIds(inactiveList.map(p => p.patientId));
+                                      } else {
+                                        setSelectedInactiveIds([]);
                                       }
-                                    });
-                                    const combinedPatients = patientsList.map(p => {
-                                      const latestVisit = patientVisitsMap[p.patientId];
-                                      if (latestVisit) {
-                                        return {
-                                          ...p,
-                                          visitDate: latestVisit.visitDate,
-                                          complaints: latestVisit.chiefComplaints || latestVisit.complaints || [],
-                                          labTests: latestVisit.labTests || [],
-                                          outcomeScore: latestVisit.outcomeScore || "No Improvement",
-                                          prakriti: latestVisit.prakriti || p.prakriti || "Vata-Pitta",
-                                          agni: latestVisit.agni || "Sama",
-                                          mala: latestVisit.mala || "Regular",
-                                          medicines: latestVisit.medicines || [],
-                                          nextFollowUp: latestVisit.nextFollowUp || "15 Days"
-                                        };
-                                      }
-                                      return {
-                                        ...p,
-                                        visitDate: p.createdAt || p.updatedAt
-                                      };
-                                    });
-                                    combinedPatients.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
-                                    setSavedCases(combinedPatients);
-                                  } else {
-                                    triggerNotification("Restore failed: " + result.error);
-                                  }
-                                } catch (err) {
-                                  console.error(err);
-                                  triggerNotification("Error restoring visit.");
-                                }
-                              }
-                            }}
-                            className="bg-brand-secondary text-brand-beige hover:bg-brand-primary px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
-                          >
-                            Restore
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                                    }}
+                                    className="cursor-pointer rounded border-brand-light"
+                                  />
+                                </th>
+                                <th className="p-2">Patient Details</th>
+                                <th className="p-2">Last Visit</th>
+                                <th className="p-2 w-20 text-center">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-brand-light/20">
+                              {inactiveList.map((item) => {
+                                const isChecked = selectedInactiveIds.includes(item.patientId);
+                                const lastVisitDateStr = item.visitDate ? new Date(item.visitDate).toLocaleDateString("en-IN", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric"
+                                }) : "Never";
+                                
+                                return (
+                                  <tr key={item.patientId} className="hover:bg-brand-cream/35 transition-colors">
+                                    <td className="p-2 text-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedInactiveIds(prev => [...prev, item.patientId]);
+                                          } else {
+                                            setSelectedInactiveIds(prev => prev.filter(id => id !== item.patientId));
+                                          }
+                                        }}
+                                        className="cursor-pointer rounded border-brand-light"
+                                      />
+                                    </td>
+                                    <td className="p-2 py-3">
+                                      <div className="font-bold text-brand-primary">{item.name}</div>
+                                      <div className="text-[10px] text-brand-dark/65 font-mono">{item.patientId} • {item.mobile || "No Mobile"}</div>
+                                    </td>
+                                    <td className="p-2">
+                                      <div className="font-semibold text-brand-dark/85">{lastVisitDateStr}</div>
+                                      <div className="text-[10px] text-brand-dark/50 italic">{item.visitDate ? getDurationString(item.visitDate) : ""}</div>
+                                    </td>
+                                    <td className="p-2 text-center">
+                                      <button
+                                        onClick={() => deleteInactivePatients([item.patientId])}
+                                        className="text-red-700 hover:text-red-800 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                        title="Delete Patient Profile & All Visits"
+                                      >
+                                        <Trash2 size={15} />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
