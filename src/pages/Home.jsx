@@ -306,7 +306,7 @@ export default function Home() {
                 className="flex items-center gap-1.5 bg-white/15 backdrop-blur-sm hover:bg-white/25 border border-white/20 text-brand-beige px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
               >
                 <Stethoscope size={14} />
-                Open DBMS
+                Open Doctor Portal
               </Link>
               <button
                 onClick={handleLogout}
@@ -649,7 +649,7 @@ export default function Home() {
                 Need the full clinical interface?
               </p>
               <p className="text-[10px] text-brand-dark/50">
-                Open the DBMS Dashboard for detailed patient records, case
+                Open the Doctor Dashboard for detailed patient records, case
                 sheets, prescriptions, lab tests, and analytics.
               </p>
             </div>

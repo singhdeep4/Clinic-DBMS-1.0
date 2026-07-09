@@ -1249,7 +1249,7 @@ export default function DbmsDashboard() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `ayurkaya_dbms_backup_${new Date().toISOString().split("T")[0]}.json`;
+      link.download = `ayurkaya_clinic_backup_${new Date().toISOString().split("T")[0]}.json`;
       link.click();
       URL.revokeObjectURL(url);
       triggerNotification("Database backup file generated successfully.");
@@ -1324,7 +1324,7 @@ export default function DbmsDashboard() {
         setSavedCases([]);
         setLiveQueue([]);
         setCurrentCase({ ...DEFAULT_STATE });
-        triggerNotification("DBMS database fully cleared and reset.");
+        triggerNotification("Clinic database fully cleared and reset.");
       }
     } else if (passcode !== null) {
       alert("Incorrect passcode. Database reset cancelled.");
@@ -1953,7 +1953,7 @@ export default function DbmsDashboard() {
 
   return (
     <div className="min-h-screen bg-brand-beige flex flex-col lg:flex-row font-sans relative">
-      <SEO title="Clinical DBMS Portal" description="Ayurkaya Clinical Data Management System dashboard for Dr. Neha." />
+      <SEO title="Doctor Portal" description="Ayurkaya Clinic Dashboard for Dr. Neha." />
 
       {/* Global Toast Notification */}
       {notification && (
@@ -2004,7 +2004,7 @@ export default function DbmsDashboard() {
         <div className="p-4 border-b border-brand-light/60 space-y-2">
           <div className="flex items-center space-x-2 pb-2">
             <span className="text-[10px] font-bold text-brand-secondary uppercase tracking-widest block">
-              Ayurkaya DBMS
+              Ayurkaya Clinic
             </span>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-1 gap-1.5">
@@ -2060,7 +2060,7 @@ export default function DbmsDashboard() {
               }`}
             >
               <Database size={15} />
-              <span>Database Tools</span>
+              <span>Settings and Backups</span>
             </button>
           </div>
         </div>
@@ -2270,9 +2270,9 @@ export default function DbmsDashboard() {
             </button>
             <span className="font-serif font-bold text-brand-primary text-lg">
               {viewMode === "clinical" && (currentCase.name ? `Clinical Record: ${currentCase.name}` : "New Consultation Case Sheet")}
-              {viewMode === "analytics" && "DBMS Clinical Analytics"}
-              {viewMode === "followups" && "Alerts & Follow-ups Hub"}
-              {viewMode === "utilities" && "DBMS Database Management Tools"}
+              {viewMode === "analytics" && "Clinic Analytics"}
+              {viewMode === "followups" && "Alerts and Follow-ups Hub"}
+              {viewMode === "utilities" && "System Settings and Backups"}
             </span>
           </div>
 
@@ -2350,9 +2350,9 @@ export default function DbmsDashboard() {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-xs font-bold text-brand-primary uppercase tracking-wider mb-2">Patient ID (Primary Key)</label>
+                        <label className="block text-xs font-bold text-brand-primary uppercase tracking-wider mb-2">Patient ID</label>
                         <div className="w-full bg-brand-light/10 border border-brand-light/45 px-4 py-3 rounded-xl text-sm font-mono text-brand-primary font-semibold select-all">
-                          {currentCase.patientId || "Auto-generated on save"}
+                          {currentCase.patientId || "Auto-created when saved"}
                         </div>
                       </div>
 
@@ -2406,7 +2406,7 @@ export default function DbmsDashboard() {
                       </div>
 
                       <div className="relative">
-                        <label className="block text-xs font-bold text-brand-primary uppercase tracking-wider mb-2">Mobile Number (Registry Lookup)</label>
+                        <label className="block text-xs font-bold text-brand-primary uppercase tracking-wider mb-2">Mobile Number</label>
                         <input
                           type="tel"
                           value={currentCase.mobile}
@@ -4081,7 +4081,7 @@ export default function DbmsDashboard() {
               <div className="border-b border-brand-light/45 pb-4 space-y-2">
                 <h3 className="font-serif text-2xl font-bold text-brand-primary flex items-center gap-2">
                   <Database size={24} className="text-brand-secondary" />
-                  <span>DBMS Backup, Restore and Clear Utilities</span>
+                  <span>System Backup, Restore and Reset Tools</span>
                 </h3>
                 <p className="text-xs text-brand-dark/70 font-sans leading-relaxed">
                   Your clinical records are now stored directly in Firestore. Backups are still recommended for offline recovery and export/import portability.
@@ -4355,7 +4355,7 @@ export default function DbmsDashboard() {
               <div className="bg-brand-beige/40 border border-brand-light/45 p-4.5 rounded-2xl flex items-start space-x-3 text-xs text-brand-dark/85 leading-relaxed">
                 <Shield className="text-brand-secondary shrink-0 mt-0.5" size={16} />
                 <div>
-                    <strong>DBMS Security and Privacy Notice:</strong> All clinical records are saved directly to Firestore. Data is stored remotely in your configured Firebase project; export backups remain recommended for offline recovery.
+                    <strong>Security and Privacy Notice:</strong> All clinical records are saved directly to Firestore. Data is stored remotely in your configured Firebase project; export backups remain recommended for offline recovery.
             </div>
               </div>
             </div>

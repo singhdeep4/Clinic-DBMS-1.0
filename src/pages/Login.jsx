@@ -241,7 +241,7 @@ export default function Login() {
               type="submit"
               className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md mt-2 cursor-pointer"
             >
-              Sign In to DBMS Dashboard
+              Sign In to Doctor Portal
             </button>
           </form>
         ) : (
