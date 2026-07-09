@@ -2256,7 +2256,7 @@ export default function DbmsDashboard() {
       </div>
 
       {/* Main Workspace Frame */}
-      <div className="flex-grow flex flex-col min-h-0 bg-brand-cream/30">
+      <div className="flex-grow flex flex-col min-h-0 min-w-0 bg-brand-cream/30">
         
         {/* Module views header */}
         <div className="p-4 bg-brand-cream border-b border-brand-light/60 flex justify-between items-center shrink-0 flex-wrap gap-3">
@@ -3640,7 +3640,7 @@ export default function DbmsDashboard() {
                   <div className="bg-brand-cream border border-brand-light/60 p-6 rounded-3xl space-y-6 shadow-sm">
                     <div className="flex justify-between items-center border-b border-brand-light/40 pb-2 flex-wrap gap-2">
                       <h3 className="font-serif text-lg font-bold text-brand-primary">
-                        Clinical Vitals & Follow-Up Outcomes
+                        Clinical Vitals and Follow-Up Outcomes
                       </h3>
                       <div className="flex items-center gap-2">
                         <label className="text-xs font-bold text-brand-primary uppercase">Visit:</label>
