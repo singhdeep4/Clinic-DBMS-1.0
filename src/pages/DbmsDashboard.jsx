@@ -1456,15 +1456,31 @@ export default function DbmsDashboard() {
   const handleResetDatabase = async () => {
     const passcode = prompt("Enter doctor authentication passcode (1008) to reset database:");
     if (passcode === "1008") {
-      if (confirm("WARNING: This will permanently delete ALL patient records, registries, and queue history. This action cannot be undone. Proceed?")) {
-        await clearStore("cases");
-        await clearStore("registry");
-        await clearStore("queue");
-        
-        setSavedCases([]);
-        setLiveQueue([]);
-        setCurrentCase({ ...DEFAULT_STATE });
-        triggerNotification("Clinic database fully cleared and reset.");
+      if (confirm("WARNING: This will permanently delete ALL patient records, visits, registries, archives, and queue history from both the website AND Firebase cloud. This action cannot be undone. Proceed?")) {
+        try {
+          // Clear ALL Firestore collections permanently
+          await clearStore("patients");
+          await clearStore("visits");
+          await clearStore("archived_records");
+          await clearStore("registry");
+          await clearStore("queue");
+
+          // Reset all local UI states
+          setSavedCases([]);
+          setLiveQueue([]);
+          setArchivedRecords([]);
+          setCurrentCase({ ...DEFAULT_STATE });
+
+          // Refresh storage metrics to reflect the empty database
+          const { getStorageMetrics } = await import("../lib/archiveService.js");
+          const m = await getStorageMetrics();
+          setStorageMetrics(m);
+
+          triggerNotification("Clinic database fully cleared and reset from both website and Firebase cloud.");
+        } catch (err) {
+          console.error("Database reset failed:", err);
+          triggerNotification("Failed to reset database. Check console for details.");
+        }
       }
     } else if (passcode !== null) {
       alert("Incorrect passcode. Database reset cancelled.");
