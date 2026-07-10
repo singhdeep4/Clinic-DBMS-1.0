@@ -6,10 +6,19 @@ export async function findDuplicatePatient(mobile, dob) {
   const cleanMobile = mobile.replace(/[^0-9]/g, "");
   
   try {
-    const patients = await getAllItems("patients");
-    return patients.find(
-      p => (p.mobile || "").replace(/[^0-9]/g, "") === cleanMobile && p.dateOfBirth === dob
-    ) || null;
+    const { collection, getDocs, query, where } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+
+    const q = query(
+      collection(fdb, "patients"),
+      where("mobile", "==", cleanMobile),
+      where("dateOfBirth", "==", dob)
+    );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    }
+    return null;
   } catch (err) {
     console.error("Duplicate check error:", err);
     return null;

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { 
   User, Plus, Trash2, 
   Search, Printer, Save, RefreshCw, LogOut, Check, PlusCircle, ArrowLeft, ArrowRight,
-  Database, BarChart3, Bell, Shield, Download, Upload, AlertTriangle, Calendar, MessageCircle, Menu
+  Database, BarChart3, Bell, Shield, Download, Upload, AlertTriangle, Calendar, MessageCircle, Menu, X
 } from "lucide-react";
 import SEO from "../components/SEO";
 import { 
@@ -2285,13 +2285,13 @@ export default function DbmsDashboard() {
       {/* Backdrop overlay for mobile drawer */}
       {showSidebar && (
         <div 
-          className="fixed inset-0 bg-black/45 backdrop-blur-xs z-30 lg:hidden transition-all duration-300"
+          className="fixed inset-0 bg-black/45 backdrop-blur-xs z-[55] lg:hidden transition-all duration-300"
           onClick={() => setShowSidebar(false)}
         />
       )}
 
       {/* Main Switcher Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-40 w-72 bg-brand-cream border-r border-brand-light/60 flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
+      <div className={`fixed inset-y-0 left-0 z-[60] w-72 bg-brand-cream border-r border-brand-light/60 flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
         showSidebar 
           ? "translate-x-0 lg:flex lg:w-72" 
           : "-translate-x-full lg:hidden lg:w-0"
@@ -2299,10 +2299,17 @@ export default function DbmsDashboard() {
         
         {/* Module Switcher Buttons */}
         <div className="p-4 border-b border-brand-light/60 space-y-2">
-          <div className="flex items-center space-x-2 pb-2">
+          <div className="flex items-center justify-between pb-2">
             <span className="text-[10px] font-bold text-brand-secondary uppercase tracking-widest block">
               Ayurkaya Clinic
             </span>
+            <button
+              onClick={() => setShowSidebar(false)}
+              className="lg:hidden p-1.5 bg-brand-beige border border-brand-light/60 rounded-xl hover:bg-brand-light/45 active:scale-95 transition-all text-brand-primary flex items-center justify-center cursor-pointer"
+              title="Close Menu Sidebar"
+            >
+              <X size={14} />
+            </button>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-1 gap-1.5">
             <button
@@ -4815,7 +4822,7 @@ export default function DbmsDashboard() {
 
       {/* Duplicate Patient Alert Modal Overlay */}
       {duplicatePatientFound && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-brand-cream border border-brand-light rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-scaleUp">
             <h3 className="font-serif text-lg font-bold text-brand-primary">Duplicate Patient Detected</h3>
             <p className="text-sm text-brand-dark/85 font-sans leading-relaxed">
