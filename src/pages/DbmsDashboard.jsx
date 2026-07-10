@@ -273,6 +273,45 @@ export default function DbmsDashboard() {
   const [cloudPlan, setCloudPlan] = useState(() => localStorage.getItem("ayurkaya_cloud_plan") || "spark");
   const [customLimitGB, setCustomLimitGB] = useState(() => parseFloat(localStorage.getItem("ayurkaya_custom_limit_gb")) || 5);
 
+  // Stepper horizontal mouse drag-to-scroll refs and logic
+  const stepperRef = useRef(null);
+  const isMouseDownRef = useRef(false);
+  const startXRef = useRef(0);
+  const scrollLeftRef = useRef(0);
+
+  const handleStepperMouseDown = (e) => {
+    if (!stepperRef.current) return;
+    isMouseDownRef.current = true;
+    startXRef.current = e.pageX - stepperRef.current.offsetLeft;
+    scrollLeftRef.current = stepperRef.current.scrollLeft;
+  };
+
+  const handleStepperMouseLeaveOrUp = () => {
+    isMouseDownRef.current = false;
+  };
+
+  const handleStepperMouseMove = (e) => {
+    if (!isMouseDownRef.current || !stepperRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - stepperRef.current.offsetLeft;
+    const walk = (x - startXRef.current) * 1.5; // scrolling speed
+    stepperRef.current.scrollLeft = scrollLeftRef.current - walk;
+  };
+
+  // Auto-scroll the active step into view when activeTab changes
+  useEffect(() => {
+    if (stepperRef.current) {
+      const activeEl = stepperRef.current.querySelector(".active-step-button");
+      if (activeEl) {
+        activeEl.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center"
+        });
+      }
+    }
+  }, [activeTab]);
+
   const handlePlanChange = (plan) => {
     setCloudPlan(plan);
     localStorage.setItem("ayurkaya_cloud_plan", plan);
@@ -2653,7 +2692,14 @@ export default function DbmsDashboard() {
 
         {/* Wizard Stepper progress tracker (Only show in clinical mode) */}
         {viewMode === "clinical" && (
-          <div className="flex overflow-x-auto bg-brand-cream/80 border-b border-brand-light/45 shrink-0 select-none scrollbar-none py-3 md:py-4 px-4 md:px-8">
+          <div
+            ref={stepperRef}
+            onMouseDown={handleStepperMouseDown}
+            onMouseLeave={handleStepperMouseLeaveOrUp}
+            onMouseUp={handleStepperMouseLeaveOrUp}
+            onMouseMove={handleStepperMouseMove}
+            className="flex overflow-x-auto bg-brand-cream/80 border-b border-brand-light/45 shrink-0 select-none scrollbar-none py-3 md:py-4 px-4 md:px-8 cursor-grab active:cursor-grabbing"
+          >
             <div className="flex items-center space-x-1.5 md:space-x-3 mx-auto w-full max-w-5xl justify-start md:justify-between">
               {wizardTabs.map((t, idx) => {
                 const isCurrent = activeTab === t.id;
@@ -2663,7 +2709,7 @@ export default function DbmsDashboard() {
                     <button
                       type="button"
                       onClick={() => setActiveTab(t.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-full border transition-all text-[10px] md:text-xs font-bold uppercase tracking-wider whitespace-nowrap cursor-pointer ${
+                      className={`${isCurrent ? "active-step-button " : ""}flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-full border transition-all text-[10px] md:text-xs font-bold uppercase tracking-wider whitespace-nowrap cursor-pointer ${
                         isCurrent
                           ? "bg-brand-primary border-brand-primary text-brand-beige shadow-sm scale-105"
                           : isCompleted
