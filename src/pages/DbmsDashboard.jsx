@@ -2044,6 +2044,19 @@ export default function DbmsDashboard() {
     }
   };
 
+  const handleSkipQueuePatient = async (patient) => {
+    if (!patient) return;
+    const updated = {
+      ...patient,
+      timestamp: new Date().toISOString()
+    };
+    // Update local state immediately
+    setLiveQueue(prev => prev.map(q => q.id === patient.id ? updated : q));
+    // Persist to IndexedDB/cloud
+    await putItem("queue", updated);
+    triggerNotification(`Moved ${patient.name} to the end of the queue.`);
+  };
+
   const wizardTabs = [
     { id: "profile", label: "Patient Profile" },
     { id: "complaints", label: "Complaints and History" },
@@ -4289,69 +4302,104 @@ export default function DbmsDashboard() {
                     </button>
                   </form>
 
-                  {/* Queue List */}
-                  <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
-                    {liveQueue.length === 0 ? (
-                      <div className="py-8 text-center text-xs text-brand-dark/45">
-                        No patients checked in today.
-                      </div>
-                    ) : (
-                      liveQueue.map((patient, idx) => (
-                        <div
-                          key={patient.id}
-                          className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-2.5 ${
-                            patient.status === "In-Consult"
-                              ? "bg-brand-light/40 border-brand-secondary/40 shadow-sm"
-                              : "bg-brand-beige border-brand-light/40 hover:border-brand-primary/20"
-                          }`}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="font-serif font-bold text-brand-primary text-sm">
-                                {idx + 1}. {patient.name} ({patient.age || "N/A"} • {patient.gender})
-                              </h4>
-                              {patient.mobile && (
-                                <span className="text-[10px] text-brand-secondary font-medium">📞 {patient.mobile}</span>
-                              )}
-                              {patient.reason && (
-                                <p className="text-[11px] text-brand-dark/70 mt-1 italic">
-                                  "{patient.reason}"
-                                </p>
-                              )}
-                            </div>
-                            <span
-                              className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                                patient.status === "Waiting"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : patient.status === "In-Consult"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-emerald-100 text-emerald-800"
-                              }`}
-                            >
-                              {patient.status}
+                  {/* Queue List (One Patient at a Time) */}
+                  <div className="space-y-4 pr-1">
+                    {(() => {
+                      const sortedQueue = [...liveQueue]
+                        .filter(q => q.status === "Waiting" || q.status === "In-Consult")
+                        .sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+                      
+                      if (sortedQueue.length === 0) {
+                        return (
+                          <div className="py-8 text-center text-xs text-brand-dark/45 border border-dashed border-brand-light/60 rounded-2xl bg-brand-beige/25">
+                            No patients waiting in queue today.
+                          </div>
+                        );
+                      }
+
+                      const patient = sortedQueue[0];
+                      return (
+                        <div className="space-y-3">
+                          {/* Queue Position Status Header */}
+                          <div className="flex justify-between items-center px-1 text-[10px] font-bold text-brand-secondary uppercase tracking-wider">
+                            <span>Up Next in Line</span>
+                            <span className="bg-brand-light border border-brand-secondary/25 px-2.5 py-0.5 rounded-full">
+                              Patient 1 of {sortedQueue.length}
                             </span>
                           </div>
-                          
-                          <div className="flex gap-2 justify-end border-t border-brand-light/30 pt-2">
-                            <button
-                              type="button"
-                              onClick={() => completeQueuePatient(patient.id)}
-                              className="p-1.5 hover:bg-red-50 text-red-500 rounded-lg hover:text-red-700 transition-colors cursor-pointer"
-                              title="Check out / remove from queue"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => consultQueuePatient(patient)}
-                              className="flex items-center gap-1 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
-                            >
-                              Start Consultation
-                            </button>
+
+                          <div
+                            className={`p-5 rounded-2xl border transition-all flex flex-col justify-between gap-4 shadow-sm ${
+                              patient.status === "In-Consult"
+                                ? "bg-brand-light/45 border-brand-secondary/40"
+                                : "bg-brand-beige border-brand-light"
+                            }`}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="space-y-1">
+                                <h4 className="font-serif font-bold text-brand-primary text-base">
+                                  {patient.name}
+                                </h4>
+                                <p className="text-xs text-brand-secondary font-semibold uppercase tracking-wider">
+                                  {patient.age || "N/A"} Yrs • {patient.gender}
+                                </p>
+                                {patient.mobile && (
+                                  <span className="text-[10px] text-brand-dark/50 block font-medium">📞 {patient.mobile}</span>
+                                )}
+                                {patient.reason && (
+                                  <div className="mt-2.5 bg-brand-cream/60 border border-brand-light/45 p-3 rounded-xl">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-brand-secondary block mb-0.5">Reason for Visit</span>
+                                    <p className="text-xs text-brand-dark/80 italic">
+                                      "{patient.reason}"
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                              <span
+                                className={`text-[9px] font-bold uppercase px-2.5 py-0.5 rounded-full border ${
+                                  patient.status === "Waiting"
+                                    ? "bg-amber-50 text-amber-800 border-amber-255"
+                                    : "bg-blue-50 text-blue-800 border-blue-255"
+                                }`}
+                              >
+                                {patient.status}
+                              </span>
+                            </div>
+                            
+                            <div className="flex gap-2.5 justify-end border-t border-brand-light/35 pt-3">
+                              {/* Skip / Absent Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleSkipQueuePatient(patient)}
+                                className="flex items-center gap-1 bg-brand-cream hover:bg-brand-light/35 border border-brand-light text-brand-secondary px-3.5 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                                title="Move this patient to the end of the queue"
+                              >
+                                Skip / Absent
+                              </button>
+                              
+                              {/* Checkout Button */}
+                              <button
+                                type="button"
+                                onClick={() => completeQueuePatient(patient.id)}
+                                className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl hover:text-red-800 transition-colors cursor-pointer border border-red-200/25"
+                                title="Check out / remove from queue"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                              
+                              {/* Consult Button */}
+                              <button
+                                type="button"
+                                onClick={() => consultQueuePatient(patient)}
+                                className="flex items-center gap-1.5 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-4.5 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer shadow-sm"
+                              >
+                                Start Consultation
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      ))
-                    )}
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
