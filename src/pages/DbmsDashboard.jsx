@@ -243,7 +243,8 @@ export default function DbmsDashboard() {
         name: patient.name || "",
         age: patient.age || "",
         gender: patient.gender || "Male",
-        mobile: patient.mobile || ""
+        mobile: patient.mobile || "",
+        loadedAt: new Date().toISOString()
       };
       const filtered = prev.filter(p => p.patientId !== patient.patientId);
       const updated = [item, ...filtered].slice(0, 50);
@@ -260,6 +261,11 @@ export default function DbmsDashboard() {
   const [isPrintMode, setIsPrintMode] = useState(false);
   const [notification, setNotification] = useState("");
   const [showSidebar, setShowSidebar] = useState(window.innerWidth >= 1024);
+
+  // Recent cases directory filter state
+  const [recentSearch, setRecentSearch] = useState("");
+  const [recentMonthFilter, setRecentMonthFilter] = useState("");
+  const [recentYearFilter, setRecentYearFilter] = useState("");
 
   // Local state for DOB text input masking/writing
   const [dobInput, setDobInput] = useState("");
@@ -5234,85 +5240,165 @@ export default function DbmsDashboard() {
           )}
 
           {/* ==================== VIEW 6: ALL RECENT CASES ==================== */}
-          {viewMode === "recent_cases" && (
-            <div className="bg-brand-cream border border-brand-light/60 p-6 md:p-10 rounded-3xl shadow-sm space-y-8 animate-fadeIn">
-              <div className="border-b border-brand-light/45 pb-4 space-y-2">
-                <div className="flex justify-between items-center flex-wrap gap-4">
-                  <h3 className="font-serif text-2xl font-bold text-brand-primary flex items-center gap-2">
-                    <History size={24} className="text-brand-secondary" />
-                    <span>Directory of Recently Loaded Case Sheets</span>
-                  </h3>
-                  <span className="bg-brand-light border border-brand-primary/20 text-brand-primary text-xs font-bold px-3 py-1 rounded-full">
-                    {recentPatients.length} Total Recents
-                  </span>
-                </div>
-                <p className="text-xs text-brand-dark/70 font-sans leading-relaxed">
-                  Below is the complete list of recently loaded patient profiles. Clicking on a patient will load their case history into the clinical workspace editor.
-                </p>
-              </div>
+          {viewMode === "recent_cases" && (() => {
+            // Derive unique year options from loaded timestamps
+            const availableYears = [...new Set(
+              recentPatients
+                .filter(p => p.loadedAt)
+                .map(p => new Date(p.loadedAt).getFullYear())
+            )].sort((a, b) => b - a);
 
-              {recentPatients.length === 0 ? (
-                <div className="py-16 text-center text-xs text-brand-dark/45 border border-dashed border-brand-light/60 rounded-3xl bg-brand-beige/25">
-                  No recently loaded cases found. Use "Walk-ins & Search" to look up patients.
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+            const filteredRecents = recentPatients.filter(c => {
+              const q = recentSearch.toLowerCase();
+              const matchSearch = !q || (
+                (c.name || "").toLowerCase().includes(q) ||
+                (c.patientId || "").toLowerCase().includes(q) ||
+                (c.mobile || "").includes(q)
+              );
+              let matchMonth = true;
+              let matchYear = true;
+              if (c.loadedAt) {
+                const d = new Date(c.loadedAt);
+                if (recentMonthFilter) matchMonth = d.getMonth() === parseInt(recentMonthFilter);
+                if (recentYearFilter) matchYear = d.getFullYear() === parseInt(recentYearFilter);
+              } else {
+                if (recentMonthFilter || recentYearFilter) { matchMonth = false; matchYear = false; }
+              }
+              return matchSearch && matchMonth && matchYear;
+            });
+
+            return (
+              <div className="bg-brand-cream border border-brand-light/60 p-6 md:p-10 rounded-3xl shadow-sm space-y-6 animate-fadeIn">
+                {/* Header */}
+                <div className="border-b border-brand-light/45 pb-4 space-y-2">
+                  <div className="flex justify-between items-center flex-wrap gap-4">
+                    <h3 className="font-serif text-2xl font-bold text-brand-primary flex items-center gap-2">
+                      <History size={24} className="text-brand-secondary" />
+                      <span>Directory of Recently Loaded Case Sheets</span>
+                    </h3>
+                    <span className="bg-brand-light border border-brand-primary/20 text-brand-primary text-xs font-bold px-3 py-1 rounded-full">
+                      {filteredRecents.length} / {recentPatients.length} Shown
+                    </span>
+                  </div>
+                  <p className="text-xs text-brand-dark/70 font-sans leading-relaxed">
+                    Recently accessed patient profiles. Click any card to load it into the clinical workspace.
+                  </p>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {recentPatients.map((c) => (
-                    <div
-                      key={c.patientId}
-                      onClick={() => selectCase(c)}
-                      className="bg-brand-beige hover:bg-brand-light/15 border border-brand-light/45 p-5 rounded-2xl transition-all cursor-pointer hover:border-brand-primary flex flex-col justify-between group shadow-sm animate-fadeIn"
+
+                {/* Search + Filter Bar */}
+                <div className="flex flex-wrap gap-3 items-center">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-secondary/60 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={recentSearch}
+                      onChange={e => setRecentSearch(e.target.value)}
+                      placeholder="Search by name, ID, or mobile…"
+                      className="w-full pl-8 pr-3 py-2.5 text-xs border border-brand-light/60 rounded-xl bg-brand-beige placeholder-brand-dark/35 text-brand-dark font-medium outline-none focus:border-brand-primary/50 focus:ring-1 focus:ring-brand-primary/20 transition"
+                    />
+                  </div>
+
+                  <select
+                    value={recentMonthFilter}
+                    onChange={e => setRecentMonthFilter(e.target.value)}
+                    className="px-3 py-2.5 text-xs border border-brand-light/60 rounded-xl bg-brand-beige text-brand-dark font-semibold outline-none focus:border-brand-primary/50 transition cursor-pointer"
+                  >
+                    <option value="">All Months</option>
+                    {monthNames.map((m, i) => (
+                      <option key={i} value={i}>{m}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={recentYearFilter}
+                    onChange={e => setRecentYearFilter(e.target.value)}
+                    className="px-3 py-2.5 text-xs border border-brand-light/60 rounded-xl bg-brand-beige text-brand-dark font-semibold outline-none focus:border-brand-primary/50 transition cursor-pointer"
+                  >
+                    <option value="">All Years</option>
+                    {availableYears.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+
+                  {(recentSearch || recentMonthFilter || recentYearFilter) && (
+                    <button
+                      onClick={() => { setRecentSearch(""); setRecentMonthFilter(""); setRecentYearFilter(""); }}
+                      className="text-[10px] text-red-500 font-bold uppercase tracking-wider hover:text-red-700 transition-colors cursor-pointer px-2"
                     >
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-start">
-                          <h4 className="font-serif font-bold text-brand-primary text-sm group-hover:text-brand-secondary transition-colors line-clamp-1">
-                            {c.name}
-                          </h4>
-                          <span className="font-mono text-[9px] font-bold text-brand-secondary bg-brand-light/20 px-2 py-0.5 rounded">
-                            {c.patientId}
-                          </span>
-                        </div>
-                        <p className="text-xs text-brand-dark/60 font-semibold">
-                          {c.age || "N/A"} Yrs • {c.gender}
-                        </p>
-                        {c.mobile && (
-                          <span className="text-[10px] text-brand-secondary/80 font-medium block">
-                            📞 {c.mobile}
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="mt-4 border-t border-brand-light/35 pt-3 flex gap-2 justify-end">
-                        {/* Remove from recents list */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRecentPatients(prev => {
-                              const updated = prev.filter(p => p.patientId !== c.patientId);
-                              localStorage.setItem("ayurkaya_recent_patients", JSON.stringify(updated));
-                              return updated;
-                            });
-                          }}
-                          className="px-2.5 py-1.5 hover:bg-red-50 text-red-500 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-red-200/40 text-[10px] font-bold uppercase tracking-wider"
-                          title="Remove from recents list"
-                        >
-                          Remove
-                        </button>
-                        
-                        <button
-                          type="button"
-                          className="flex items-center gap-1 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-3.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
-                        >
-                          Open Case
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                      ✕ Clear
+                    </button>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+
+                {filteredRecents.length === 0 ? (
+                  <div className="py-16 text-center text-xs text-brand-dark/45 border border-dashed border-brand-light/60 rounded-3xl bg-brand-beige/25">
+                    {recentPatients.length === 0
+                      ? 'No recently loaded cases found. Use "Walk-ins & Search" to look up patients.'
+                      : "No cases match your current search or filter."}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {filteredRecents.map((c) => {
+                      const loadedDate = c.loadedAt ? new Date(c.loadedAt) : null;
+                      const dateStr = loadedDate
+                        ? loadedDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                        : null;
+                      const timeStr = loadedDate
+                        ? loadedDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
+                        : null;
+                      return (
+                        <div
+                          key={c.patientId + (c.loadedAt || "")}
+                          onClick={() => selectCase(c)}
+                          className="bg-brand-beige hover:bg-brand-light/15 border border-brand-light/45 p-5 rounded-2xl transition-all cursor-pointer hover:border-brand-primary flex flex-col justify-between group shadow-sm animate-fadeIn"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-start">
+                              <h4 className="font-serif font-bold text-brand-primary text-sm group-hover:text-brand-secondary transition-colors line-clamp-1">
+                                {c.name}
+                              </h4>
+                              <span className="font-mono text-[9px] font-bold text-brand-secondary bg-brand-light/20 px-2 py-0.5 rounded">
+                                {c.patientId}
+                              </span>
+                            </div>
+                            <p className="text-xs text-brand-dark/60 font-semibold">
+                              {c.age || "N/A"} Yrs • {c.gender}
+                            </p>
+                            {c.mobile && (
+                              <span className="text-[10px] text-brand-secondary/80 font-medium block">
+                                📞 {c.mobile}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="mt-4 border-t border-brand-light/35 pt-3 flex items-center justify-between">
+                            {dateStr ? (
+                              <div className="flex flex-col">
+                                <span className="text-[10px] font-bold text-brand-dark/50 uppercase tracking-wider">Loaded</span>
+                                <span className="text-[11px] font-semibold text-brand-primary">{dateStr}</span>
+                                <span className="text-[10px] text-brand-dark/45">{timeStr}</span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-brand-dark/30 italic">No timestamp</span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); selectCase(c); }}
+                              className="flex items-center gap-1 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-3.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                            >
+                              Open Case
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
         </div>
 
