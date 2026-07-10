@@ -226,6 +226,7 @@ export default function DbmsDashboard() {
   const [viewMode, setViewMode] = useState("clinical");
   
   const [activeTab, setActiveTab] = useState("profile"); // active clinical tab
+  const [completedTabs, setCompletedTabs] = useState({});
   const [savedCases, setSavedCases] = useState([]);
   const [matchingPatients, setMatchingPatients] = useState([]);
   const [duplicatePatientFound, setDuplicatePatientFound] = useState(null);
@@ -338,6 +339,7 @@ export default function DbmsDashboard() {
       setSavedCases(combinedPatients);
       if (patientIdsToPurge.includes(currentCase.patientId)) {
         setCurrentCase({ ...DEFAULT_STATE });
+        setCompletedTabs({});
       }
     } catch (err) {
       console.error("Purging inactive patients failed:", err);
@@ -1061,12 +1063,14 @@ export default function DbmsDashboard() {
           visits: fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
         });
         setCurrentCase(combined);
+        setCompletedTabs({});
         setViewMode("clinical");
         setActiveTab(targetTab);
         closeSidebarOnMobile();
         triggerNotification(`Loaded record of ${fullRecord.patient.name}`);
       } else {
         setCurrentCase(mergeWithDefaults({ ...c }));
+        setCompletedTabs({});
         setViewMode("clinical");
         setActiveTab(targetTab);
         closeSidebarOnMobile();
@@ -1075,6 +1079,7 @@ export default function DbmsDashboard() {
     } catch (err) {
       console.error("Error selecting patient:", err);
       setCurrentCase(mergeWithDefaults({ ...c }));
+      setCompletedTabs({});
       setViewMode("clinical");
       setActiveTab(targetTab);
     }
@@ -1118,6 +1123,7 @@ export default function DbmsDashboard() {
       ...DEFAULT_STATE,
       mobile: activeMobile
     });
+    setCompletedTabs({});
     setMatchingPatients([]);
     triggerNotification("Cleared form to register a new family member under this mobile number.");
   };
@@ -1125,6 +1131,7 @@ export default function DbmsDashboard() {
   // Clear case sheets for a new patient
   const startNewCase = () => {
     setCurrentCase({ ...DEFAULT_STATE });
+    setCompletedTabs({});
     setViewMode("clinical");
     setActiveTab("profile");
     closeSidebarOnMobile();
@@ -1207,6 +1214,7 @@ export default function DbmsDashboard() {
 
   // Consulting a queue patient
   const consultQueuePatient = async (patient) => {
+    setCompletedTabs({});
     const cleanMobile = (patient.mobile || "").replace(/[^0-9]/g, "");
     let existingPatient = null;
     
@@ -1594,6 +1602,7 @@ export default function DbmsDashboard() {
           setSavedCases([]);
           setLiveQueue([]);
           setCurrentCase({ ...DEFAULT_STATE });
+          setCompletedTabs({});
 
           // Refresh storage metrics to reflect the empty database
           const { getStorageMetrics } = await import("../lib/archiveService.js");
@@ -1930,6 +1939,80 @@ export default function DbmsDashboard() {
     (c.mobile || "").includes(searchTerm) ||
     (c.patientId || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const isTabComplete = (tabId) => {
+    if (tabId === "profile") {
+      return currentCase.name?.trim() !== "" && (currentCase.patientId || currentCase.dateOfBirth);
+    }
+    if (tabId === "complaints") {
+      const hasComplaints = currentCase.complaints?.some(c => c.text?.trim() !== "");
+      const hasHistory = currentCase.surgicalHistory?.trim() !== "" || 
+                         currentCase.drugAllergy?.trim() !== "" || 
+                         currentCase.anyOther?.trim() !== "" ||
+                         Object.values(currentCase.pastHistory || {}).some(v => v === true || (typeof v === 'string' && v.trim() !== "")) ||
+                         Object.values(currentCase.familyHistory || {}).some(v => v === true || (typeof v === 'string' && v.trim() !== "")) ||
+                         currentCase.drugHistory?.hasHistory === "Yes";
+      return hasComplaints || hasHistory || completedTabs["complaints"];
+    }
+    if (tabId === "core") {
+      const isModified = currentCase.kshudha !== "Sama" || 
+                         currentCase.mutra !== "Normal" || 
+                         currentCase.mala !== "Regular" || 
+                         currentCase.koshtha !== "Madhya" || 
+                         currentCase.nidra !== "Sound Sleep" || 
+                         currentCase.avastha !== "Sama";
+      return isModified || completedTabs["core"];
+    }
+    if (tabId === "diagnosis") {
+      const isModified = currentCase.prakriti !== "Vata-Pitta" || 
+                         currentCase.vikriti !== "Vata" || 
+                         currentCase.doshajaVikriti !== "Vataja" ||
+                         currentCase.dhatugataVikriti?.length > 0 ||
+                         currentCase.ayurvedicDiagnosis?.trim() !== "" || 
+                         currentCase.modernDiagnosis?.trim() !== "" ||
+                         currentCase.samprapti?.trim() !== "" ||
+                         currentCase.sampraptiCustom?.trim() !== "";
+      return isModified || completedTabs["diagnosis"];
+    }
+    if (tabId === "lifestyle") {
+      const isModified = currentCase.diet !== "Vegetarian" || 
+                         currentCase.mealPattern !== "Regular" || 
+                         currentCase.waterIntake !== "1–2 L/day" || 
+                         currentCase.viruddhaAhara !== "Never" || 
+                         currentCase.teaCoffee !== "None" || 
+                         currentCase.activity !== "Sedentary" || 
+                         currentCase.exercise !== "None" ||
+                         currentCase.divaswap !== "Never" ||
+                         currentCase.screenTime !== "<2 hrs";
+      return isModified || completedTabs["lifestyle"];
+    }
+    if (tabId === "treatment") {
+      return currentCase.medicines?.some(m => m.name?.trim() !== "") || completedTabs["treatment"];
+    }
+    if (tabId === "panchakarma") {
+      return currentCase.panchakarma?.length > 0 || currentCase.doctorsNotes?.trim() !== "" || completedTabs["panchakarma"];
+    }
+    if (tabId === "labs") {
+      return currentCase.labTests?.some(l => l.testName?.trim() !== "") || completedTabs["labs"];
+    }
+    return false;
+  };
+
+  const handleNextTab = () => {
+    const next = getNextTab();
+    if (next) {
+      if (activeTab === "profile" && !currentCase.name?.trim()) {
+        triggerNotification("Patient Name is required to proceed.");
+        return;
+      }
+      if (activeTab === "profile" && !currentCase.patientId && !currentCase.dateOfBirth) {
+        triggerNotification("Date of Birth is required for new patient registration.");
+        return;
+      }
+      setCompletedTabs(prev => ({ ...prev, [activeTab]: true }));
+      setActiveTab(next);
+    }
+  };
 
   const wizardTabs = [
     { id: "profile", label: "Patient Profile" },
@@ -2606,22 +2689,53 @@ export default function DbmsDashboard() {
           </div>
         </div>
 
-        {/* Wizard tabs container (Only show in clinical mode) */}
+        {/* Wizard Stepper progress tracker (Only show in clinical mode) */}
         {viewMode === "clinical" && (
-          <div className="flex overflow-x-auto bg-brand-cream/80 border-b border-brand-light/45 shrink-0 select-none scrollbar-none">
-            {wizardTabs.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
-                className={`px-3.5 py-3 md:px-5 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap cursor-pointer ${
-                  activeTab === t.id
-                    ? "border-brand-primary text-brand-primary bg-brand-light/10"
-                    : "border-transparent text-brand-secondary/80 hover:text-brand-primary"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+          <div className="flex overflow-x-auto bg-brand-cream/80 border-b border-brand-light/45 shrink-0 select-none scrollbar-none py-3 md:py-4 px-4 md:px-8">
+            <div className="flex items-center space-x-1.5 md:space-x-3 mx-auto w-full max-w-5xl justify-start md:justify-between">
+              {wizardTabs.map((t, idx) => {
+                const isCurrent = activeTab === t.id;
+                const isCompleted = isTabComplete(t.id);
+                return (
+                  <div key={t.id} className="flex items-center shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(t.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-full border transition-all text-[10px] md:text-xs font-bold uppercase tracking-wider whitespace-nowrap cursor-pointer ${
+                        isCurrent
+                          ? "bg-brand-primary border-brand-primary text-brand-beige shadow-sm scale-105"
+                          : isCompleted
+                          ? "bg-brand-light/40 border-brand-secondary/40 text-brand-secondary hover:bg-brand-light/60 hover:border-brand-secondary"
+                          : "bg-transparent border-brand-light/50 text-brand-secondary/70 hover:text-brand-primary hover:border-brand-primary"
+                      }`}
+                    >
+                      {/* Step Indicator circle */}
+                      <span
+                        className={`flex items-center justify-center w-4 md:w-5 h-4 md:h-5 rounded-full text-[9px] md:text-[10px] font-extrabold ${
+                          isCurrent
+                            ? "bg-brand-beige text-brand-primary"
+                            : isCompleted
+                            ? "bg-brand-secondary text-brand-beige"
+                            : "bg-brand-light/20 text-brand-secondary/80 border border-brand-secondary/20"
+                        }`}
+                      >
+                        {isCompleted ? "✓" : idx + 1}
+                      </span>
+                      <span>{t.label}</span>
+                    </button>
+
+                    {/* Stepper Line Connector */}
+                    {idx < wizardTabs.length - 1 && (
+                      <div
+                        className={`h-0.5 w-4 md:w-6 lg:w-8 ml-1.5 md:ml-3 rounded transition-all shrink-0 ${
+                          isCompleted ? "bg-brand-secondary/55" : "bg-brand-light/45"
+                        }`}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -4132,7 +4246,7 @@ export default function DbmsDashboard() {
                 {getNextTab() ? (
                   <button
                     type="button"
-                    onClick={() => setActiveTab(getNextTab())}
+                    onClick={handleNextTab}
                     className="flex items-center gap-1 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shadow-sm"
                   >
                     Next <ArrowRight size={14} />
