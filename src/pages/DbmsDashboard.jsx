@@ -227,6 +227,30 @@ export default function DbmsDashboard() {
   
   const [activeTab, setActiveTab] = useState("profile"); // active clinical tab
   const [completedTabs, setCompletedTabs] = useState({});
+  const [recentPatients, setRecentPatients] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("ayurkaya_recent_patients") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const addToRecentPatients = (patient) => {
+    if (!patient || !patient.patientId) return;
+    setRecentPatients(prev => {
+      const item = {
+        patientId: patient.patientId,
+        name: patient.name || "",
+        age: patient.age || "",
+        gender: patient.gender || "Male",
+        mobile: patient.mobile || ""
+      };
+      const filtered = prev.filter(p => p.patientId !== patient.patientId);
+      const updated = [item, ...filtered].slice(0, 3);
+      localStorage.setItem("ayurkaya_recent_patients", JSON.stringify(updated));
+      return updated;
+    });
+  };
   const [savedCases, setSavedCases] = useState([]);
   const [matchingPatients, setMatchingPatients] = useState([]);
   const [duplicatePatientFound, setDuplicatePatientFound] = useState(null);
@@ -898,6 +922,7 @@ export default function DbmsDashboard() {
         visits: allVisits.filter(v => v.visitId !== visitId) // separate history
       };
       setCurrentCase(fullActive);
+      addToRecentPatients(patientData);
 
       // Update savedCases list (sidebar list) — include clinical fields for analytics/alerts
       const updatedSavedCase = {
@@ -1063,6 +1088,7 @@ export default function DbmsDashboard() {
           visits: fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
         });
         setCurrentCase(combined);
+        addToRecentPatients(fullRecord.patient);
         setCompletedTabs({});
         setViewMode("clinical");
         setActiveTab(targetTab);
@@ -1070,6 +1096,7 @@ export default function DbmsDashboard() {
         triggerNotification(`Loaded record of ${fullRecord.patient.name}`);
       } else {
         setCurrentCase(mergeWithDefaults({ ...c }));
+        addToRecentPatients(c);
         setCompletedTabs({});
         setViewMode("clinical");
         setActiveTab(targetTab);
@@ -1079,6 +1106,7 @@ export default function DbmsDashboard() {
     } catch (err) {
       console.error("Error selecting patient:", err);
       setCurrentCase(mergeWithDefaults({ ...c }));
+      addToRecentPatients(c);
       setCompletedTabs({});
       setViewMode("clinical");
       setActiveTab(targetTab);
@@ -1603,6 +1631,8 @@ export default function DbmsDashboard() {
           setLiveQueue([]);
           setCurrentCase({ ...DEFAULT_STATE });
           setCompletedTabs({});
+          setRecentPatients([]);
+          localStorage.removeItem("ayurkaya_recent_patients");
 
           // Refresh storage metrics to reflect the empty database
           const { getStorageMetrics } = await import("../lib/archiveService.js");
@@ -2407,6 +2437,22 @@ export default function DbmsDashboard() {
               <span>Workspace</span>
             </button>
             <button
+              onClick={() => { setViewMode("walkins"); closeSidebarOnMobile(); }}
+              className={`flex items-center gap-2.5 px-4.5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer relative ${
+                viewMode === "walkins" 
+                  ? "bg-brand-primary text-brand-beige shadow-sm" 
+                  : "bg-brand-beige text-brand-primary hover:bg-brand-light/45"
+              }`}
+            >
+              <Calendar size={15} />
+              <span>Walk-ins & Search</span>
+              {liveQueue.filter(q => q.status === "Waiting").length > 0 && (
+                <span className="ml-auto bg-brand-accent/25 text-brand-primary text-[10px] px-2 py-0.5 rounded-full font-bold">
+                  {liveQueue.filter(q => q.status === "Waiting").length}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => { setViewMode("analytics"); closeSidebarOnMobile(); }}
               className={`flex items-center gap-2.5 px-4.5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                 viewMode === "analytics" 
@@ -2454,10 +2500,10 @@ export default function DbmsDashboard() {
         {/* Sidebar Case Sheets list (Only show when in clinical workspace) */}
         {viewMode === "clinical" ? (
           <div className="flex-grow flex flex-col min-h-0">
-            <div className="p-4 border-b border-brand-light/60 space-y-3">
+            <div className="p-4 border-b border-brand-light/60">
               <div className="flex justify-between items-center">
                 <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest">
-                  Patient Case Files
+                  Recent Case Sheets
                 </span>
                 <button
                   onClick={startNewCase}
@@ -2467,29 +2513,19 @@ export default function DbmsDashboard() {
                   <Plus size={15} />
                 </button>
               </div>
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-secondary/80 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Search Name/Mobile..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-brand-beige border border-brand-light/60 pl-8 pr-4 py-2 rounded-lg text-xs focus:outline-none focus:border-brand-secondary"
-                />
-              </div>
             </div>
 
             <div className="flex-grow overflow-y-auto max-h-[30vh] lg:max-h-none divide-y divide-brand-light/35">
-              {filteredCasesList.length === 0 ? (
+              {recentPatients.length === 0 ? (
                 <div className="p-6 text-center text-xs text-brand-dark/50 font-sans">
-                  No cases saved yet.
+                  No recent cases loaded. Use "Walk-ins & Search" to look up patients.
                 </div>
               ) : (
-                filteredCasesList.map((c) => (
-                  <button
+                recentPatients.map((c) => (
+                  <div
                     key={c.patientId}
                     onClick={() => selectCase(c)}
-                    className={`w-full text-left p-4 hover:bg-brand-light/25 flex justify-between items-start transition-colors ${
+                    className={`w-full text-left p-4 hover:bg-brand-light/25 flex justify-between items-start transition-colors cursor-pointer ${
                       currentCase.patientId === c.patientId ? "bg-brand-light/30 border-l-4 border-brand-primary" : ""
                     }`}
                   >
@@ -2505,18 +2541,27 @@ export default function DbmsDashboard() {
                       <p className="text-[10px] text-brand-secondary font-semibold uppercase">
                         {c.age} Yrs • {c.gender}
                       </p>
-                      <p className="text-[10px] text-brand-dark/60 font-medium">
-                        {c.mobile || "No mobile"}
-                      </p>
+                      {c.mobile && (
+                        <p className="text-[10px] text-brand-dark/60 font-medium">
+                          {c.mobile}
+                        </p>
+                      )}
                     </div>
                     <button
-                      onClick={(e) => deleteCaseRecord(c.patientId, e)}
-                      className="text-brand-dark/30 hover:text-red-500 p-1 rounded transition-colors"
-                      title="Delete case sheet"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRecentPatients(prev => {
+                          const updated = prev.filter(p => p.patientId !== c.patientId);
+                          localStorage.setItem("ayurkaya_recent_patients", JSON.stringify(updated));
+                          return updated;
+                        });
+                      }}
+                      className="text-brand-dark/30 hover:text-red-500 p-1 rounded transition-colors cursor-pointer"
+                      title="Remove from recents"
                     >
-                      <Trash2 size={13} />
+                      <X size={12} />
                     </button>
-                  </button>
+                  </div>
                 ))
               )}
             </div>
@@ -2528,103 +2573,6 @@ export default function DbmsDashboard() {
             <p className="text-[10px] mt-1">Firestore stores workspace data in the cloud so your clinic records remain available across browsers and devices.</p>
           </div>
         )}
-
-        {/* ─── Waiting Room / Appointment Queue ─── */}
-        <div className="border-t border-brand-light/60">
-          <div className="p-4 pb-2 flex justify-between items-center">
-            <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest">
-              Waiting Room
-            </span>
-            {liveQueue.length > 0 && (
-              <span className="bg-brand-accent/25 text-brand-primary text-[10px] px-2 py-0.5 rounded-full font-bold">
-                {liveQueue.filter(q => q.status === "Waiting").length} waiting
-              </span>
-            )}
-          </div>
-
-          {/* Queue List */}
-          <div className="overflow-y-auto max-h-[25vh] divide-y divide-brand-light/35">
-            {liveQueue.length === 0 ? (
-              <div className="p-4 text-center text-[11px] text-brand-dark/40 font-sans">
-                No patients in queue.
-              </div>
-            ) : (
-              liveQueue.map((patient, idx) => (
-                <div key={patient.id} className="p-3 hover:bg-brand-light/20 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-serif font-bold text-brand-primary text-xs truncate">
-                          {idx + 1}. {patient.name}
-                        </span>
-                        <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-full ${
-                          patient.status === "Waiting"
-                            ? "bg-amber-100 text-amber-700"
-                            : patient.status === "In-Consult"
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-green-100 text-green-700"
-                        }`}>
-                          {patient.status}
-                        </span>
-                      </div>
-                      {patient.mobile && (
-                        <p className="text-[10px] text-brand-dark/50 mt-0.5">{patient.mobile}</p>
-                      )}
-                      {patient.reason && (
-                        <p className="text-[10px] text-brand-secondary/70 mt-0.5 line-clamp-1" title={patient.reason}>
-                          {patient.reason}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-1 shrink-0">
-                      {(patient.status === "Waiting" || patient.status === "In-Consult") && (
-                        <button
-                          onClick={() => consultQueuePatient(patient)}
-                          className={`text-[9px] font-bold uppercase px-2 py-1 rounded-md transition-colors ${
-                            patient.status === "In-Consult"
-                              ? "bg-brand-secondary text-brand-beige hover:bg-brand-primary"
-                              : "bg-brand-primary text-brand-beige hover:bg-brand-secondary"
-                          }`}
-                          title={patient.status === "In-Consult" ? "Resume consultation" : "Start consultation"}
-                        >
-                          {patient.status === "In-Consult" ? "Resume" : "Consult"}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => completeQueuePatient(patient.id)}
-                        className="text-[9px] font-bold uppercase bg-brand-beige text-brand-primary border border-brand-light/60 px-2 py-1 rounded-md hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
-                        title="Check out / remove from queue"
-                      >
-                        <Check size={10} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Quick Walk-in Add Form */}
-          <form onSubmit={addToQueue} className="p-3 border-t border-brand-light/40 bg-brand-beige/30">
-            <div className="flex gap-1.5">
-              <input
-                type="text"
-                placeholder="Walk-in name…"
-                value={queueName}
-                onChange={(e) => setQueueName(e.target.value)}
-                className="flex-1 min-w-0 bg-brand-beige border border-brand-light/60 px-2.5 py-1.5 rounded-lg text-[11px] focus:outline-none focus:border-brand-secondary"
-                required
-              />
-              <button
-                type="submit"
-                className="bg-brand-primary text-brand-beige hover:bg-brand-secondary px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors shrink-0"
-                title="Add walk-in patient"
-              >
-                <Plus size={13} />
-              </button>
-            </div>
-          </form>
-        </div>
 
         {/* Footer actions inside sidebar */}
         <div className="p-4 border-t border-brand-light/60 bg-brand-beige/40 flex justify-between items-center text-xs text-brand-secondary font-semibold shrink-0">
@@ -2657,6 +2605,7 @@ export default function DbmsDashboard() {
             </button>
             <span className="font-serif font-bold text-brand-primary text-lg">
               {viewMode === "clinical" && (currentCase.name ? `Clinical Record: ${currentCase.name}` : "New Consultation Case Sheet")}
+              {viewMode === "walkins" && "Walk-ins & Search Directory"}
               {viewMode === "analytics" && "Clinic Analytics"}
               {viewMode === "followups" && "Alerts and Follow-ups Hub"}
               {viewMode === "utilities" && "System Settings and Backups"}
@@ -4274,6 +4223,205 @@ export default function DbmsDashboard() {
                 )}
               </div>
 
+            </div>
+          )}
+
+          {/* ==================== VIEW 1.5: WALK-INS & PATIENT SEARCH ==================== */}
+          {viewMode === "walkins" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fadeIn">
+              {/* Left Panel: Waiting Room (Walk-ins & Queue) */}
+              <div className="lg:col-span-5 space-y-6">
+                <div className="bg-brand-cream border border-brand-light/60 p-6 rounded-3xl shadow-sm space-y-4">
+                  <h3 className="font-serif font-bold text-brand-primary text-base border-b border-brand-light/50 pb-2 flex items-center gap-2">
+                    <Calendar size={18} /> Waiting Room / Queue
+                  </h3>
+                  
+                  {/* Quick Add to Queue Form */}
+                  <form onSubmit={addToQueue} className="space-y-3 bg-brand-light/20 p-4 rounded-2xl border border-brand-light/45">
+                    <span className="text-[10px] font-bold text-brand-secondary uppercase tracking-wider block">Add Walk-in to Queue</span>
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Patient Full Name"
+                        value={queueName}
+                        onChange={(e) => setQueueName(e.target.value)}
+                        className="w-full bg-brand-beige border border-brand-light/50 px-3 py-2 rounded-xl text-xs focus:outline-none"
+                        required
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          placeholder="Age"
+                          value={queueAge}
+                          onChange={(e) => setQueueAge(e.target.value)}
+                          className="bg-brand-beige border border-brand-light/50 px-3 py-2 rounded-xl text-xs focus:outline-none"
+                        />
+                        <select
+                          value={queueGender}
+                          onChange={(e) => setQueueGender(e.target.value)}
+                          className="bg-brand-beige border border-brand-light/50 px-3 py-2 rounded-xl text-xs focus:outline-none cursor-pointer"
+                        >
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <input
+                        type="tel"
+                        placeholder="Mobile Number"
+                        value={queueMobile}
+                        onChange={(e) => setQueueMobile(e.target.value)}
+                        className="w-full bg-brand-beige border border-brand-light/50 px-3 py-2 rounded-xl text-xs focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Reason for Visit / Symptoms"
+                        value={queueReason}
+                        onChange={(e) => setQueueReason(e.target.value)}
+                        className="w-full bg-brand-beige border border-brand-light/50 px-3 py-2 rounded-xl text-xs focus:outline-none"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="w-full py-2 bg-brand-primary text-brand-beige font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-brand-secondary transition-colors cursor-pointer"
+                    >
+                      Check In Patient
+                    </button>
+                  </form>
+
+                  {/* Queue List */}
+                  <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+                    {liveQueue.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-brand-dark/45">
+                        No patients checked in today.
+                      </div>
+                    ) : (
+                      liveQueue.map((patient, idx) => (
+                        <div
+                          key={patient.id}
+                          className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-2.5 ${
+                            patient.status === "In-Consult"
+                              ? "bg-brand-light/40 border-brand-secondary/40 shadow-sm"
+                              : "bg-brand-beige border-brand-light/40 hover:border-brand-primary/20"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-serif font-bold text-brand-primary text-sm">
+                                {idx + 1}. {patient.name} ({patient.age || "N/A"} • {patient.gender})
+                              </h4>
+                              {patient.mobile && (
+                                <span className="text-[10px] text-brand-secondary font-medium">📞 {patient.mobile}</span>
+                              )}
+                              {patient.reason && (
+                                <p className="text-[11px] text-brand-dark/70 mt-1 italic">
+                                  "{patient.reason}"
+                                </p>
+                              )}
+                            </div>
+                            <span
+                              className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                                patient.status === "Waiting"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : patient.status === "In-Consult"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-emerald-100 text-emerald-800"
+                              }`}
+                            >
+                              {patient.status}
+                            </span>
+                          </div>
+                          
+                          <div className="flex gap-2 justify-end border-t border-brand-light/30 pt-2">
+                            <button
+                              type="button"
+                              onClick={() => completeQueuePatient(patient.id)}
+                              className="p-1.5 hover:bg-red-50 text-red-500 rounded-lg hover:text-red-700 transition-colors cursor-pointer"
+                              title="Check out / remove from queue"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => consultQueuePatient(patient)}
+                              className="flex items-center gap-1 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                            >
+                              Start Consultation
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Panel: Advanced Patient Search & Family Directory */}
+              <div className="lg:col-span-7 space-y-6">
+                <div className="bg-brand-cream border border-brand-light/60 p-6 rounded-3xl shadow-sm space-y-6">
+                  <h3 className="font-serif font-bold text-brand-primary text-base border-b border-brand-light/50 pb-2 flex items-center gap-2">
+                    <Search size={18} /> Clinic Patient Directory & Family Search
+                  </h3>
+                  
+                  {/* Full Page Search Bar */}
+                  <div className="relative">
+                    <Search className="absolute left-4 top-3.5 text-brand-secondary/60" size={16} />
+                    <input
+                      type="text"
+                      placeholder="Search by Name or Mobile Number..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-brand-beige border border-brand-light px-11 py-3 rounded-2xl text-xs focus:outline-none focus:border-brand-primary shadow-inner"
+                    />
+                  </div>
+
+                  {/* Search Results */}
+                  <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                    {searchTerm.trim() === "" ? (
+                      <div className="py-12 text-center text-xs text-brand-dark/45 space-y-2">
+                        <p>Type a patient's name or mobile number above to search.</p>
+                        <p className="text-[10px] italic">💡 Tip: Searching a phone number will automatically group all patients registered under it (e.g., family members).</p>
+                      </div>
+                    ) : filteredCasesList.length === 0 ? (
+                      <div className="py-12 text-center text-xs text-brand-dark/45">
+                        No matching patient records found.
+                      </div>
+                    ) : (
+                      filteredCasesList.map((c) => (
+                        <div
+                          key={c.patientId}
+                          onClick={() => selectCase(c)}
+                          className="bg-brand-beige hover:bg-brand-light/15 border border-brand-light/45 p-4 rounded-2xl transition-all cursor-pointer hover:border-brand-primary flex justify-between items-center group shadow-sm"
+                        >
+                          <div>
+                            <h4 className="font-serif font-bold text-brand-primary text-sm group-hover:text-brand-secondary transition-colors">
+                              {c.name}
+                            </h4>
+                            <p className="text-xs text-brand-dark/60 mt-0.5">
+                              {c.age || "N/A"} Yrs • {c.gender} • ID: <span className="font-mono">{c.patientId}</span>
+                            </p>
+                            {c.mobile && (
+                              <div className="flex items-center gap-1.5 mt-1.5">
+                                <span className="bg-brand-light/65 border border-brand-secondary/20 text-brand-secondary text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                  📞 {c.mobile}
+                                </span>
+                                {savedCases.filter(p => p.mobile === c.mobile && p.patientId !== c.patientId).length > 0 && (
+                                  <span className="bg-brand-accent/15 border border-brand-accent/25 text-brand-accent text-[9px] font-bold px-2 py-0.5 rounded-full">
+                                    Family Member Profile
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="bg-brand-light/30 border border-brand-light p-2 rounded-xl group-hover:bg-brand-primary group-hover:text-brand-beige transition-all">
+                            <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
