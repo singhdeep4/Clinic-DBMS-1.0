@@ -2,7 +2,7 @@ import { startRealtimeListeners } from "../lib/realtime.js";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
-  User, Plus, Trash2, 
+  User, Plus, Trash2, History,
   Search, Printer, Save, RefreshCw, LogOut, Check, PlusCircle, ArrowLeft, ArrowRight,
   Database, BarChart3, Bell, Shield, Download, Upload, AlertTriangle, Calendar, MessageCircle, Menu, X
 } from "lucide-react";
@@ -246,7 +246,7 @@ export default function DbmsDashboard() {
         mobile: patient.mobile || ""
       };
       const filtered = prev.filter(p => p.patientId !== patient.patientId);
-      const updated = [item, ...filtered].slice(0, 3);
+      const updated = [item, ...filtered].slice(0, 50);
       localStorage.setItem("ayurkaya_recent_patients", JSON.stringify(updated));
       return updated;
     });
@@ -1212,6 +1212,63 @@ export default function DbmsDashboard() {
     triggerNotification("Cleared workspace editor.");
   };
 
+  const handleSendToPatientWhatsApp = () => {
+    if (!currentCase.name?.trim()) {
+      triggerNotification("Patient Profile name is required.");
+      return;
+    }
+    
+    let phone = currentCase.mobile || "";
+    phone = phone.replace(/\D/g, "");
+    if (!phone) {
+      triggerNotification("Patient mobile number is missing!");
+      return;
+    }
+    if (phone.length === 10) {
+      phone = "91" + phone;
+    }
+
+    let text = `*AYURKAYA AYURVEDIC CLINIC*\n`;
+    text += `*Chief Consultant:* Dr. Neha, B.A.M.S\n`;
+    text += `------------------------------------\n`;
+    text += `*Patient Name:* ${currentCase.name}\n`;
+    text += `*Patient ID:* ${currentCase.patientId || "N/A"}\n`;
+    text += `*Consultation Date:* ${currentCase.visitDate ? new Date(currentCase.visitDate).toLocaleDateString() : new Date().toLocaleDateString()}\n`;
+    
+    if (currentCase.ayurvedicDiagnosis || currentCase.modernDiagnosis) {
+      text += `*Diagnosis:* ${currentCase.ayurvedicDiagnosis ? `Ayurvedic: ${currentCase.ayurvedicDiagnosis}` : ""}${currentCase.ayurvedicDiagnosis && currentCase.modernDiagnosis ? " | " : ""}${currentCase.modernDiagnosis ? `Modern: ${currentCase.modernDiagnosis}` : ""}\n`;
+    }
+    
+    const validMeds = currentCase.medicines.filter(m => m.name?.trim());
+    if (validMeds.length > 0) {
+      text += `\n*💊 Advised Rx (Prescription):*\n`;
+      validMeds.forEach((m, idx) => {
+        text += `${idx + 1}. *${m.name}* - ${m.dose}${m.frequency ? ` • ${m.frequency}` : ""}\n`;
+        text += `   - Kala: ${m.kala || "N/A"} | Anupana: ${m.anupana || "N/A"} | Duration: ${m.duration || "N/A"}\n`;
+      });
+    }
+
+    const pkg = Array.isArray(currentCase.panchakarma) ? currentCase.panchakarma.filter(Boolean) : [currentCase.panchakarma].filter(Boolean);
+    if (pkg.length > 0) {
+      text += `\n*🌿 Panchakarma Advised:* ${pkg.join(", ")}\n`;
+    }
+
+    if (currentCase.notes) {
+      text += `\n*Diet & Lifestyle (Pathya-Apathya):*\n_${currentCase.notes}_\n`;
+    }
+
+    if (currentCase.nextFollowUp) {
+      text += `\n*Next Follow-Up:* ${currentCase.nextFollowUp}\n`;
+    }
+
+    text += `------------------------------------\n`;
+    text += `Wish you a speedy recovery! For queries, contact us at +91 70212 72264.`;
+
+    const encodedText = encodeURIComponent(text);
+    const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodedText}`;
+    window.open(url, "_blank");
+  };
+
   // Delete Case from database
   const deleteCaseRecord = async (id, e) => {
     e.stopPropagation();
@@ -2151,8 +2208,14 @@ export default function DbmsDashboard() {
           </button>
           <div className="flex gap-3">
             <button
+              onClick={handleSendToPatientWhatsApp}
+              className="flex items-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
+            >
+              <MessageCircle size={14} /> Send to Patient (WhatsApp)
+            </button>
+            <button
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm"
+              className="flex items-center gap-1.5 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
             >
               <Printer size={14} /> Send to Print / PDF
             </button>
@@ -2564,13 +2627,29 @@ export default function DbmsDashboard() {
                 <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest">
                   Recent Case Sheets
                 </span>
-                <button
-                  onClick={startNewCase}
-                  className="bg-brand-primary text-brand-beige hover:bg-brand-secondary p-1.5 rounded-lg text-xs font-bold uppercase transition-colors"
-                  title="New consultation"
-                >
-                  <Plus size={15} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => {
+                      setViewMode("recent_cases");
+                      closeSidebarOnMobile();
+                    }}
+                    className={`p-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      viewMode === "recent_cases" 
+                        ? "bg-brand-primary text-brand-beige" 
+                        : "bg-brand-light text-brand-primary hover:bg-brand-light/75 border border-brand-primary/10"
+                    }`}
+                    title="View all recent case files"
+                  >
+                    <History size={14} />
+                  </button>
+                  <button
+                    onClick={startNewCase}
+                    className="bg-brand-primary text-brand-beige hover:bg-brand-secondary p-1.5 rounded-lg text-xs font-bold uppercase transition-colors cursor-pointer"
+                    title="New consultation"
+                  >
+                    <Plus size={14} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2580,7 +2659,7 @@ export default function DbmsDashboard() {
                   No recent cases loaded. Use "Walk-ins & Search" to look up patients.
                 </div>
               ) : (
-                recentPatients.map((c) => (
+                recentPatients.slice(0, 3).map((c) => (
                   <div
                     key={c.patientId}
                     onClick={() => selectCase(c)}
@@ -2668,6 +2747,7 @@ export default function DbmsDashboard() {
               {viewMode === "analytics" && "Clinic Analytics"}
               {viewMode === "followups" && "Alerts and Follow-ups Hub"}
               {viewMode === "utilities" && "System Settings and Backups"}
+              {viewMode === "recent_cases" && "All Recent Case Sheets"}
             </span>
           </div>
 
@@ -5150,6 +5230,87 @@ export default function DbmsDashboard() {
                     <strong>Security and Privacy Notice:</strong> All clinical records are saved directly to Firestore. Data is stored remotely in your configured Firebase project; export backups remain recommended for offline recovery.
             </div>
               </div>
+            </div>
+          )}
+
+          {/* ==================== VIEW 6: ALL RECENT CASES ==================== */}
+          {viewMode === "recent_cases" && (
+            <div className="bg-brand-cream border border-brand-light/60 p-6 md:p-10 rounded-3xl shadow-sm space-y-8 animate-fadeIn">
+              <div className="border-b border-brand-light/45 pb-4 space-y-2">
+                <div className="flex justify-between items-center flex-wrap gap-4">
+                  <h3 className="font-serif text-2xl font-bold text-brand-primary flex items-center gap-2">
+                    <History size={24} className="text-brand-secondary" />
+                    <span>Directory of Recently Loaded Case Sheets</span>
+                  </h3>
+                  <span className="bg-brand-light border border-brand-primary/20 text-brand-primary text-xs font-bold px-3 py-1 rounded-full">
+                    {recentPatients.length} Total Recents
+                  </span>
+                </div>
+                <p className="text-xs text-brand-dark/70 font-sans leading-relaxed">
+                  Below is the complete list of recently loaded patient profiles. Clicking on a patient will load their case history into the clinical workspace editor.
+                </p>
+              </div>
+
+              {recentPatients.length === 0 ? (
+                <div className="py-16 text-center text-xs text-brand-dark/45 border border-dashed border-brand-light/60 rounded-3xl bg-brand-beige/25">
+                  No recently loaded cases found. Use "Walk-ins & Search" to look up patients.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {recentPatients.map((c) => (
+                    <div
+                      key={c.patientId}
+                      onClick={() => selectCase(c)}
+                      className="bg-brand-beige hover:bg-brand-light/15 border border-brand-light/45 p-5 rounded-2xl transition-all cursor-pointer hover:border-brand-primary flex flex-col justify-between group shadow-sm animate-fadeIn"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start">
+                          <h4 className="font-serif font-bold text-brand-primary text-sm group-hover:text-brand-secondary transition-colors line-clamp-1">
+                            {c.name}
+                          </h4>
+                          <span className="font-mono text-[9px] font-bold text-brand-secondary bg-brand-light/20 px-2 py-0.5 rounded">
+                            {c.patientId}
+                          </span>
+                        </div>
+                        <p className="text-xs text-brand-dark/60 font-semibold">
+                          {c.age || "N/A"} Yrs • {c.gender}
+                        </p>
+                        {c.mobile && (
+                          <span className="text-[10px] text-brand-secondary/80 font-medium block">
+                            📞 {c.mobile}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="mt-4 border-t border-brand-light/35 pt-3 flex gap-2 justify-end">
+                        {/* Remove from recents list */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRecentPatients(prev => {
+                              const updated = prev.filter(p => p.patientId !== c.patientId);
+                              localStorage.setItem("ayurkaya_recent_patients", JSON.stringify(updated));
+                              return updated;
+                            });
+                          }}
+                          className="px-2.5 py-1.5 hover:bg-red-50 text-red-500 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-red-200/40 text-[10px] font-bold uppercase tracking-wider"
+                          title="Remove from recents list"
+                        >
+                          Remove
+                        </button>
+                        
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-3.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                        >
+                          Open Case
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
