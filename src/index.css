@@ -67,3 +67,13 @@
     transform: translateX(-50%) translateY(0);
   }
 }
+
+/* Print layout color resets for clean white medical documents */
+@media print {
+  body, html, #root, .flex-col, main, div {
+    background-color: white !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+}

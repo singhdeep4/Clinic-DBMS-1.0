@@ -20,7 +20,9 @@ export default function App() {
     <Router>
       <ScrollToTop />
       <div className="flex flex-col min-h-screen bg-brand-beige text-brand-dark font-sans selection:bg-brand-light selection:text-brand-primary">
-        <Navbar />
+        <div className="print:hidden">
+          <Navbar />
+        </div>
         <main className="flex-grow">
           <Routes>
             <Route path="/" element={<Home />} />
@@ -29,7 +31,9 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
-        <Footer />
+        <div className="print:hidden">
+          <Footer />
+        </div>
       </div>
     </Router>
   );
