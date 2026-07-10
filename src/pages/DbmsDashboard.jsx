@@ -2195,7 +2195,7 @@ export default function DbmsDashboard() {
   // Print Prescription View Mode
   if (isPrintMode) {
     return (
-      <div className="bg-white text-black min-h-screen p-8 md:p-16 max-w-4xl mx-auto font-sans print:p-0 print:m-0 space-y-8 animate-fadeIn">
+      <div className="bg-white text-black min-h-screen p-8 md:p-16 max-w-4xl mx-auto font-sans print:p-0 print:m-0 print:max-w-none print:block space-y-8 animate-fadeIn">
         <SEO title={`Case Print - ${currentCase.name || "Patient"}`} description="Ayurkaya Case Record Prescription Printout Form." />
         
         {/* Actions bar for printing */}

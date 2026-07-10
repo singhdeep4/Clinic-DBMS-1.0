@@ -68,12 +68,39 @@
   }
 }
 
-/* Print layout color resets for clean white medical documents */
+/* Print layout: only render the case sheet content, suppress everything else */
 @media print {
-  body, html, #root, .flex-col, main, div {
-    background-color: white !important;
+  /* Force white page with no margins bleed */
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+
+  /* Reset global layout containers */
+  body, html {
     background: white !important;
+    background-color: white !important;
     color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Zero out #root flex layout so it doesn't create extra page whitespace */
+  #root {
+    display: block !important;
+    background: white !important;
+    min-height: unset !important;
+  }
+
+  /* Remove box shadows from all elements (looks bad in print) */
+  * {
     box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Force image/color printing */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }
