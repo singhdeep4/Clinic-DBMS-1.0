@@ -300,16 +300,23 @@ export default function DbmsDashboard() {
 
   // Auto-scroll the active step into view when activeTab changes
   useEffect(() => {
-    if (stepperRef.current) {
-      const activeEl = stepperRef.current.querySelector(".active-step-button");
-      if (activeEl) {
-        activeEl.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-          inline: "center"
-        });
+    const timer = setTimeout(() => {
+      if (stepperRef.current) {
+        const activeEl = stepperRef.current.querySelector(".active-step-button");
+        if (activeEl) {
+          const container = stepperRef.current;
+          const containerRect = container.getBoundingClientRect();
+          const activeRect = activeEl.getBoundingClientRect();
+          
+          const scrollDelta = (activeRect.left + activeRect.width / 2) - (containerRect.left + containerRect.width / 2);
+          container.scrollBy({
+            left: scrollDelta,
+            behavior: "smooth"
+          });
+        }
       }
-    }
+    }, 50);
+    return () => clearTimeout(timer);
   }, [activeTab]);
 
   const handlePlanChange = (plan) => {
