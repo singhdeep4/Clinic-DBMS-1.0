@@ -454,7 +454,7 @@ export default function Home() {
               </Link>
             </div>
 
-            <div className="divide-y divide-brand-light/20">
+            <div className="divide-y divide-brand-light/20 max-h-[210px] overflow-y-auto scrollbar-none">
               {liveQueue.length === 0 ? (
                 <div className="px-6 py-10 text-center">
                   <div className="h-12 w-12 rounded-full bg-brand-light/50 flex items-center justify-center mx-auto mb-3">
@@ -468,7 +468,7 @@ export default function Home() {
                   </p>
                 </div>
               ) : (
-                liveQueue.slice(0, 5).map((item, idx) => (
+                liveQueue.map((item, idx) => (
                   <div
                     key={item.id || idx}
                     className="px-6 py-3.5 flex items-center justify-between hover:bg-brand-beige/50 transition-colors"
@@ -489,16 +489,6 @@ export default function Home() {
                     {statusBadge(item.status || "Waiting")}
                   </div>
                 ))
-              )}
-              {liveQueue.length > 5 && (
-                <div className="px-6 py-3 text-center">
-                  <Link
-                    to="/doctor"
-                    className="text-[10px] font-bold text-brand-primary hover:text-brand-secondary uppercase tracking-wider"
-                  >
-                    + {liveQueue.length - 5} more in queue →
-                  </Link>
-                </div>
               )}
             </div>
           </motion.div>
@@ -537,7 +527,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="divide-y divide-brand-light/20">
+            <div className="divide-y divide-brand-light/20 max-h-[246px] overflow-y-auto scrollbar-none">
               {(() => {
                 const filteredRevisits = revisitPendingPatients.filter(
                   (p) =>
