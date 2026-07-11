@@ -5605,7 +5605,7 @@ export default function DbmsDashboard() {
                       : "No cases match your current search or filter."}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredRecents.map((c) => {
                       const loadedDate = c.visitDate ? new Date(c.visitDate) : null;
                       const dateStr = loadedDate
@@ -5618,27 +5618,28 @@ export default function DbmsDashboard() {
                         <div
                           key={c.entryId}
                           onClick={() => selectCase(c, "profile", true)}
-                          className="bg-brand-beige hover:bg-brand-light/15 border border-brand-light/45 p-5 rounded-2xl transition-all cursor-pointer hover:border-brand-primary flex flex-col justify-between group shadow-sm animate-fadeIn"
+                          className="bg-brand-beige hover:bg-brand-light/15 border border-brand-light/45 p-4 rounded-2xl transition-all cursor-pointer hover:border-brand-primary flex flex-col justify-between group shadow-sm animate-fadeIn"
                         >
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-start">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
                               <h4 className="font-serif font-bold text-brand-primary text-sm group-hover:text-brand-secondary transition-colors line-clamp-1">
                                 {c.name}
                               </h4>
-                              <span className="font-mono text-[9px] font-bold text-brand-secondary bg-brand-light/20 px-2 py-0.5 rounded">
+                              <span className="font-mono text-[9px] font-bold text-brand-secondary bg-brand-light/20 px-2 py-0.5 rounded shrink-0">
                                 {c.patientId}
                               </span>
                             </div>
-                            <p className="text-xs text-brand-dark/60 font-semibold">
-                              {c.age || "N/A"} Yrs • {c.gender}
-                            </p>
-                            {c.mobile && (
-                              <span className="text-[10px] text-brand-secondary/80 font-medium block">
-                                📞 {c.mobile}
-                              </span>
-                            )}
+                            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-brand-dark/65 font-semibold">
+                              <span>{c.age || "N/A"} Yrs • {c.gender}</span>
+                              {c.mobile && (
+                                <>
+                                  <span className="text-brand-light/40 font-normal">|</span>
+                                  <span className="text-brand-secondary/80 font-medium">📞 {c.mobile}</span>
+                                </>
+                              )}
+                            </div>
                             {c.complaints && c.complaints.length > 0 && c.complaints[0].text && (
-                              <div className="mt-2 pt-2 border-t border-brand-light/20">
+                              <div className="mt-1 pt-1.5 border-t border-brand-light/20">
                                 <span className="text-[10px] text-brand-dark/65 italic block line-clamp-1" title={c.complaints.map(comp => comp.text).join(", ")}>
                                   🩺 {c.complaints.map(comp => comp.text).join(", ")}
                                 </span>
@@ -5646,22 +5647,21 @@ export default function DbmsDashboard() {
                             )}
                           </div>
 
-                          <div className="mt-4 border-t border-brand-light/35 pt-3 flex items-center justify-between">
+                          <div className="mt-3 border-t border-brand-light/35 pt-2.5 flex items-center justify-between">
                             {dateStr ? (
-                              <div className="flex flex-col">
-                                <span className="text-[10px] font-bold text-brand-dark/50 uppercase tracking-wider">Created</span>
-                                <span className="text-[11px] font-semibold text-brand-primary">{dateStr}</span>
-                                <span className="text-[10px] text-brand-dark/45">{timeStr}</span>
+                              <div className="text-[9px] font-semibold text-brand-dark/45">
+                                <span className="text-brand-primary font-bold">{dateStr}</span>
+                                <span className="text-brand-dark/35 ml-1 hidden sm:inline">• {timeStr}</span>
                               </div>
                             ) : (
-                              <span className="text-[10px] text-brand-dark/30 italic">No timestamp</span>
+                              <span className="text-[9px] text-brand-dark/30 italic">No timestamp</span>
                             )}
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); selectCase(c, "profile", true); }}
-                              className="flex items-center gap-1 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-3.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                              className="text-[10px] font-bold uppercase tracking-wider text-brand-primary group-hover:text-brand-accent flex items-center gap-0.5 transition-colors cursor-pointer"
                             >
-                              View Case
+                              View Case ➔
                             </button>
                           </div>
                         </div>
