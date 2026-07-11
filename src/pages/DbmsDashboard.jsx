@@ -1437,10 +1437,9 @@ export default function DbmsDashboard() {
     }
 
     try {
-      triggerNotification("Downloading PDF and opening WhatsApp...");
+      triggerNotification("Copying prescription image to clipboard...");
 
       const { default: html2canvas } = await import("html2canvas");
-      const { jsPDF } = await import("jspdf");
 
       const canvas = await html2canvas(element, {
         scale: 2,
@@ -1483,34 +1482,37 @@ export default function DbmsDashboard() {
         }
       });
 
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
-      
-      const imgWidth = 190;
-      const pageHeight = 295;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 10;
+      // Convert canvas to Blob and write to clipboard
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          triggerNotification("Could not copy image. Redirecting to WhatsApp...");
+          openWhatsAppWindow();
+          return;
+        }
 
-      pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+        try {
+          if (typeof ClipboardItem !== "undefined") {
+            const item = new ClipboardItem({ "image/png": blob });
+            await navigator.clipboard.write([item]);
+            triggerNotification("Prescription image copied! Paste (Ctrl+V) in the WhatsApp window.");
+          } else {
+            throw new Error("ClipboardItem is not supported in this browser.");
+          }
+        } catch (clipErr) {
+          console.error("Clipboard copy failed:", clipErr);
+          triggerNotification("Could not copy image. Redirecting to WhatsApp...");
+        } finally {
+          openWhatsAppWindow();
+        }
+      }, "image/png");
 
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight + 10;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      // Download PDF locally
-      const patientNameClean = currentCase.name.trim().replace(/\s+/g, "_");
-      pdf.save(`Ayurkaya_Rx_${patientNameClean}.pdf`);
-      
-      triggerNotification("PDF downloaded! Please drag & drop the PDF into the WhatsApp chat.");
     } catch (err) {
-      console.error("PDF download failed for WhatsApp:", err);
-      triggerNotification("Could not download PDF. Redirecting to WhatsApp...");
-    } finally {
+      console.error("Prescription capture failed:", err);
+      triggerNotification("Redirecting to WhatsApp...");
+      openWhatsAppWindow();
+    }
+
+    function openWhatsAppWindow() {
       const encodedText = encodeURIComponent(text);
       const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodedText}`;
       window.open(url, "_blank");
