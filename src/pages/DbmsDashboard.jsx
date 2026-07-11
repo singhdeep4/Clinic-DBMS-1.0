@@ -880,6 +880,13 @@ export default function DbmsDashboard() {
         email: currentCase.email || "",
         address: currentCase.address || "",
         status: currentCase.status || "Active",
+        pastHistory: currentCase.pastHistory || {},
+        familyHistory: currentCase.familyHistory || {},
+        drugHistory: currentCase.drugHistory || {},
+        addiction: currentCase.addiction || "None",
+        surgicalHistory: currentCase.surgicalHistory || "",
+        drugAllergy: currentCase.drugAllergy || "",
+        anyOther: currentCase.anyOther || "",
         createdAt: currentCase.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -980,7 +987,7 @@ export default function DbmsDashboard() {
 
       const cleanMobile = (updatedCase.mobile || "").replace(/[^0-9]/g, "");
 
-      // 1. Save demographics to patients store
+      // 1. Save demographics and medical history to patients store
       const patientData = {
         patientId,
         name: updatedCase.name,
@@ -992,6 +999,13 @@ export default function DbmsDashboard() {
         email: updatedCase.email || "",
         address: updatedCase.address || "",
         status: updatedCase.status || "Active",
+        pastHistory: updatedCase.pastHistory || {},
+        familyHistory: updatedCase.familyHistory || {},
+        drugHistory: updatedCase.drugHistory || {},
+        addiction: updatedCase.addiction || "None",
+        surgicalHistory: updatedCase.surgicalHistory || "",
+        drugAllergy: updatedCase.drugAllergy || "",
+        anyOther: updatedCase.anyOther || "",
         createdAt: updatedCase.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -1248,12 +1262,13 @@ export default function DbmsDashboard() {
           combined = mergeWithDefaults({
             ...fullRecord.patient,
             visits: fullRecord.visits,
-            surgicalHistory: latestVisit?.surgicalHistory || "",
-            drugAllergy: latestVisit?.drugAllergy || "",
-            anyOther: latestVisit?.anyOther || "",
-            pastHistory: latestVisit?.pastHistory || {},
-            drugHistory: latestVisit?.drugHistory || {},
-            familyHistory: latestVisit?.familyHistory || {},
+            surgicalHistory: fullRecord.patient?.surgicalHistory || latestVisit?.surgicalHistory || "",
+            drugAllergy: fullRecord.patient?.drugAllergy || latestVisit?.drugAllergy || "",
+            anyOther: fullRecord.patient?.anyOther || latestVisit?.anyOther || "",
+            pastHistory: fullRecord.patient?.pastHistory || latestVisit?.pastHistory || {},
+            drugHistory: fullRecord.patient?.drugHistory || latestVisit?.drugHistory || {},
+            familyHistory: fullRecord.patient?.familyHistory || latestVisit?.familyHistory || {},
+            addiction: fullRecord.patient?.addiction || latestVisit?.addiction || "None",
           });
           combined.visitId = generateVisitId();
           combined.visitDate = new Date().toISOString();
