@@ -238,16 +238,18 @@ export default function DbmsDashboard() {
   const addToRecentPatients = (patient) => {
     if (!patient || !patient.patientId) return;
     setRecentPatients(prev => {
+      const now = new Date().toISOString();
       const item = {
+        entryId: `${patient.patientId}_${now}`,  // unique per load event
         patientId: patient.patientId,
         name: patient.name || "",
         age: patient.age || "",
         gender: patient.gender || "Male",
         mobile: patient.mobile || "",
-        loadedAt: new Date().toISOString()
+        loadedAt: now
       };
-      const filtered = prev.filter(p => p.patientId !== patient.patientId);
-      const updated = [item, ...filtered].slice(0, 50);
+      // Keep all entries (no dedup by patientId) — cap at 100 total
+      const updated = [item, ...prev].slice(0, 100);
       localStorage.setItem("ayurkaya_recent_patients", JSON.stringify(updated));
       return updated;
     });
@@ -2667,9 +2669,9 @@ export default function DbmsDashboard() {
               ) : (
                 recentPatients.slice(0, 3).map((c) => (
                   <div
-                    key={c.patientId}
+                    key={c.entryId || (c.patientId + (c.loadedAt || ""))}
                     onClick={() => selectCase(c)}
-                    className={`w-full text-left p-4 hover:bg-brand-light/25 flex justify-between items-start transition-colors cursor-pointer ${
+                    className={`w-full text-left p-4 hover:bg-brand-light/25 transition-colors cursor-pointer ${
                       currentCase.patientId === c.patientId ? "bg-brand-light/30 border-l-4 border-brand-primary" : ""
                     }`}
                   >
@@ -2691,20 +2693,6 @@ export default function DbmsDashboard() {
                         </p>
                       )}
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRecentPatients(prev => {
-                          const updated = prev.filter(p => p.patientId !== c.patientId);
-                          localStorage.setItem("ayurkaya_recent_patients", JSON.stringify(updated));
-                          return updated;
-                        });
-                      }}
-                      className="text-brand-dark/30 hover:text-red-500 p-1 rounded transition-colors cursor-pointer"
-                      title="Remove from recents"
-                    >
-                      <X size={12} />
-                    </button>
                   </div>
                 ))
               )}
@@ -5350,7 +5338,7 @@ export default function DbmsDashboard() {
                         : null;
                       return (
                         <div
-                          key={c.patientId + (c.loadedAt || "")}
+                          key={c.entryId || (c.patientId + (c.loadedAt || ""))}
                           onClick={() => selectCase(c)}
                           className="bg-brand-beige hover:bg-brand-light/15 border border-brand-light/45 p-5 rounded-2xl transition-all cursor-pointer hover:border-brand-primary flex flex-col justify-between group shadow-sm animate-fadeIn"
                         >
