@@ -1231,10 +1231,17 @@ export default function DbmsDashboard() {
           });
           setPrintReferrer(viewMode);
         } else {
-          // If searching or opening patient to consult, load demographics but keep clinical fields as clean defaults
+          // If searching or opening patient to consult, load demographics & carry forward past history, keep other clinical fields clean
+          const latestVisit = fullRecord.visits[0];
           combined = mergeWithDefaults({
             ...fullRecord.patient,
-            visits: fullRecord.visits
+            visits: fullRecord.visits,
+            surgicalHistory: latestVisit?.surgicalHistory || "",
+            drugAllergy: latestVisit?.drugAllergy || "",
+            anyOther: latestVisit?.anyOther || "",
+            pastHistory: latestVisit?.pastHistory || {},
+            drugHistory: latestVisit?.drugHistory || {},
+            familyHistory: latestVisit?.familyHistory || {},
           });
           combined.visitId = generateVisitId();
           combined.visitDate = new Date().toISOString();
@@ -1284,10 +1291,17 @@ export default function DbmsDashboard() {
       const { getPatientWithVisits } = await import("../lib/patientService.js");
       const fullRecord = await getPatientWithVisits(patient.patientId);
       if (fullRecord) {
-        // Load demographics only, keep clinical fields as clean defaults
+        // Load demographics & carry forward past history, keep other clinical fields clean
+        const latestVisit = fullRecord.visits[0];
         const combined = mergeWithDefaults({
           ...fullRecord.patient,
-          visits: fullRecord.visits
+          visits: fullRecord.visits,
+          surgicalHistory: latestVisit?.surgicalHistory || "",
+          drugAllergy: latestVisit?.drugAllergy || "",
+          anyOther: latestVisit?.anyOther || "",
+          pastHistory: latestVisit?.pastHistory || {},
+          drugHistory: latestVisit?.drugHistory || {},
+          familyHistory: latestVisit?.familyHistory || {},
         });
         combined.visitId = generateVisitId();
         combined.visitDate = new Date().toISOString();
@@ -1497,20 +1511,25 @@ export default function DbmsDashboard() {
       if (existingPatient) {
         const fullRecord = await getPatientWithVisits(existingPatient.patientId);
         if (fullRecord) {
-          const activeVisit = fullRecord.visits.find(v => v.status === "active") || {};
+          const latestVisit = fullRecord.visits[0];
           const newVisitDate = new Date().toISOString();
-          const newVisitId = `VIS-${existingPatient.patientId}-${Date.parse(newVisitDate)}`;
+          const newVisitId = generateVisitId();
           
-          const combined = {
+          const combined = mergeWithDefaults({
             ...fullRecord.patient,
-            ...activeVisit,
-            visitId: newVisitId,
-            visitDate: newVisitDate,
-            visitNumber: fullRecord.visits.length + 1,
-            status: "active",
-            complaints: [{ text: patient.reason || "", onsetDate: new Date().toISOString() }],
-            visits: fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
-          };
+            visits: fullRecord.visits,
+            surgicalHistory: latestVisit?.surgicalHistory || "",
+            drugAllergy: latestVisit?.drugAllergy || "",
+            anyOther: latestVisit?.anyOther || "",
+            pastHistory: latestVisit?.pastHistory || {},
+            drugHistory: latestVisit?.drugHistory || {},
+            familyHistory: latestVisit?.familyHistory || {},
+          });
+          combined.visitId = newVisitId;
+          combined.visitDate = newVisitDate;
+          combined.visitNumber = fullRecord.visits.length + 1;
+          combined.status = "active";
+          combined.complaints = [{ text: patient.reason || "", onsetDate: new Date().toISOString() }];
           setCurrentCase(combined);
           triggerNotification(`Initialized follow-up visit for registered patient ${patient.name}`);
         }
