@@ -1424,13 +1424,71 @@ export default function DbmsDashboard() {
       triggerNotification("Generating PDF, please wait...");
       
       const { default: html2canvas } = await import("html2canvas");
-      const { default: jsPDF } = await import("jspdf");
+      const { jsPDF } = await import("jspdf");
+
+      // Helper function to convert modern color strings (oklch, oklab, etc.) to standard RGB/RGBA
+      // so html2canvas doesn't crash on unsupported color functions.
+      const convertModernColorToRgba = (colorStr) => {
+        if (!colorStr || typeof colorStr !== "string") return colorStr;
+        const hasModernColor = colorStr.includes("oklch") || colorStr.includes("oklab");
+        if (!hasModernColor) return colorStr;
+        
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = 1;
+          canvas.height = 1;
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          if (!ctx) return colorStr;
+          
+          ctx.fillStyle = colorStr;
+          ctx.fillRect(0, 0, 1, 1);
+          const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+          return `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+        } catch (e) {
+          console.warn("Failed to convert modern color:", colorStr, e);
+          return colorStr;
+        }
+      };
 
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: "#ffffff"
+        backgroundColor: "#ffffff",
+        onclone: (clonedDoc) => {
+          const clonedElement = clonedDoc.getElementById("case-sheet-printout");
+          if (!clonedElement) return;
+
+          const originalElements = [element, ...element.getElementsByTagName("*")];
+          const clonedElements = [clonedElement, ...clonedElement.getElementsByTagName("*")];
+
+          const propsToConvert = [
+            "color",
+            "backgroundColor",
+            "borderColor",
+            "borderTopColor",
+            "borderRightColor",
+            "borderBottomColor",
+            "borderLeftColor",
+            "fill",
+            "stroke"
+          ];
+
+          for (let i = 0; i < originalElements.length; i++) {
+            const orig = originalElements[i];
+            const clone = clonedElements[i];
+            if (!orig || !clone) continue;
+
+            const computedStyle = window.getComputedStyle(orig);
+            propsToConvert.forEach(prop => {
+              const val = computedStyle[prop];
+              if (val && (val.includes("oklch") || val.includes("oklab"))) {
+                const converted = convertModernColorToRgba(val);
+                clone.style[prop] = converted;
+              }
+            });
+          }
+        }
       });
 
       const imgData = canvas.toDataURL("image/png");
