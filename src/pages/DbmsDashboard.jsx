@@ -236,9 +236,22 @@ export default function DbmsDashboard() {
   const dobPickerRef = useRef(null);
   
   // Main view navigation: "clinical" | "analytics" | "followups" | "utilities"
-  const [viewMode, setViewMode] = useState("clinical");
+  const [viewMode, setViewModeState] = useState(() => {
+    return sessionStorage.getItem("ayurkaya_view_mode") || "clinical";
+  });
+  const setViewMode = (mode) => {
+    sessionStorage.setItem("ayurkaya_view_mode", mode);
+    setViewModeState(mode);
+  };
   
-  const [activeTab, setActiveTab] = useState("profile"); // active clinical tab
+  const [activeTab, setActiveTabState] = useState(() => {
+    return sessionStorage.getItem("ayurkaya_active_tab") || "profile";
+  });
+  const setActiveTab = (tab) => {
+    sessionStorage.setItem("ayurkaya_active_tab", tab);
+    setActiveTabState(tab);
+  };
+
   const [completedTabs, setCompletedTabs] = useState({});
   const [dbVisits, setDbVisits] = useState([]);
   const [dbPatients, setDbPatients] = useState([]);
@@ -277,10 +290,45 @@ export default function DbmsDashboard() {
   const [matchingPatients, setMatchingPatients] = useState([]);
   const [duplicatePatientFound, setDuplicatePatientFound] = useState(null);
   const [storageMetrics, setStorageMetrics] = useState(null);
-  const [currentCase, setCurrentCase] = useState({ ...DEFAULT_STATE });
+  
+  const [currentCase, setCurrentCaseState] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem("ayurkaya_current_case");
+      return saved ? JSON.parse(saved) : { ...DEFAULT_STATE };
+    } catch {
+      return { ...DEFAULT_STATE };
+    }
+  });
+  const setCurrentCase = (val) => {
+    if (typeof val === "function") {
+      setCurrentCaseState(prev => {
+        const next = val(prev);
+        sessionStorage.setItem("ayurkaya_current_case", JSON.stringify(next));
+        return next;
+      });
+    } else {
+      sessionStorage.setItem("ayurkaya_current_case", JSON.stringify(val));
+      setCurrentCaseState(val);
+    }
+  };
+
   const [searchTerm, setSearchTerm] = useState("");
-  const [isPrintMode, setIsPrintMode] = useState(false);
-  const [printReferrer, setPrintReferrer] = useState("clinical");
+  
+  const [isPrintMode, setIsPrintModeState] = useState(() => {
+    return sessionStorage.getItem("ayurkaya_is_print_mode") === "true";
+  });
+  const setIsPrintMode = (val) => {
+    sessionStorage.setItem("ayurkaya_is_print_mode", String(val));
+    setIsPrintModeState(val);
+  };
+
+  const [printReferrer, setPrintReferrerState] = useState(() => {
+    return sessionStorage.getItem("ayurkaya_print_referrer") || "clinical";
+  });
+  const setPrintReferrer = (ref) => {
+    sessionStorage.setItem("ayurkaya_print_referrer", ref);
+    setPrintReferrerState(ref);
+  };
   const [notification, setNotification] = useState("");
   const [showSidebar, setShowSidebar] = useState(window.innerWidth >= 1024);
 
@@ -663,6 +711,7 @@ export default function DbmsDashboard() {
 
   const handleLogout = () => {
     localStorage.removeItem("ayurkaya_doctor_logged_in");
+    sessionStorage.clear();
     navigate("/login");
   };
 
