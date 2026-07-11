@@ -1351,7 +1351,31 @@ export default function DbmsDashboard() {
     triggerNotification("Cleared workspace editor.");
   };
 
-  const handleSendToPatientWhatsApp = () => {
+  // Helper function to convert modern color strings (oklch, oklab, etc.) to standard RGB/RGBA
+  // so html2canvas doesn't crash on unsupported color functions.
+  const convertModernColorToRgba = (colorStr) => {
+    if (!colorStr || typeof colorStr !== "string") return colorStr;
+    const hasModernColor = colorStr.includes("oklch") || colorStr.includes("oklab");
+    if (!hasModernColor) return colorStr;
+    
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return colorStr;
+      
+      ctx.fillStyle = colorStr;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      return `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+    } catch (e) {
+      console.warn("Failed to convert modern color:", colorStr, e);
+      return colorStr;
+    }
+  };
+
+  const handleSendToPatientWhatsApp = async () => {
     if (!currentCase.name?.trim()) {
       triggerNotification("Patient Profile name is required.");
       return;
@@ -1403,9 +1427,106 @@ export default function DbmsDashboard() {
     text += `------------------------------------\n`;
     text += `Wish you a speedy recovery! For queries, contact us at +91 70212 72264.`;
 
-    const encodedText = encodeURIComponent(text);
-    const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodedText}`;
-    window.open(url, "_blank");
+    const element = document.getElementById("case-sheet-printout");
+    if (!element) {
+      // If print content is not on page (e.g. they clicked from another screen), open WhatsApp directly
+      const encodedText = encodeURIComponent(text);
+      const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodedText}`;
+      window.open(url, "_blank");
+      return;
+    }
+
+    try {
+      triggerNotification("Generating PDF prescription link, please wait...");
+
+      const { default: html2canvas } = await import("html2canvas");
+      const { jsPDF } = await import("jspdf");
+      const { getStorage, ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
+      const { default: app } = await import("../lib/firebase.js");
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+        onclone: (clonedDoc) => {
+          const clonedElement = clonedDoc.getElementById("case-sheet-printout");
+          if (!clonedElement) return;
+
+          const originalElements = [element, ...element.getElementsByTagName("*")];
+          const clonedElements = [clonedElement, ...clonedElement.getElementsByTagName("*")];
+
+          const propsToConvert = [
+            "color",
+            "backgroundColor",
+            "borderColor",
+            "borderTopColor",
+            "borderRightColor",
+            "borderBottomColor",
+            "borderLeftColor",
+            "fill",
+            "stroke"
+          ];
+
+          for (let i = 0; i < originalElements.length; i++) {
+            const orig = originalElements[i];
+            const clone = clonedElements[i];
+            if (!orig || !clone) continue;
+
+            const computedStyle = window.getComputedStyle(orig);
+            propsToConvert.forEach(prop => {
+              const val = computedStyle[prop];
+              if (val && (val.includes("oklch") || val.includes("oklab"))) {
+                const converted = convertModernColorToRgba(val);
+                clone.style[prop] = converted;
+              }
+            });
+          }
+        }
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      
+      const imgWidth = 190;
+      const pageHeight = 295;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 10;
+
+      pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight + 10;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Convert PDF to Blob
+      const pdfBlob = pdf.output("blob");
+
+      // Upload to Firebase Storage
+      const storage = getStorage(app);
+      const patientNameClean = currentCase.name.trim().replace(/\s+/g, "_");
+      const filename = `Ayurkaya_Rx_${patientNameClean}_${Date.now()}.pdf`;
+      const storageRef = ref(storage, `prescriptions/${filename}`);
+      
+      await uploadBytes(storageRef, pdfBlob);
+      const downloadUrl = await getDownloadURL(storageRef);
+
+      // Append PDF link to WhatsApp message
+      text += `\n\n*📄 PDF Prescription:* ${downloadUrl}`;
+      triggerNotification("PDF uploaded successfully! Redirecting to WhatsApp...");
+    } catch (err) {
+      console.error("PDF upload failed for WhatsApp, falling back to text only:", err);
+      triggerNotification("Could not create PDF link. Sending text only.");
+    } finally {
+      const encodedText = encodeURIComponent(text);
+      const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodedText}`;
+      window.open(url, "_blank");
+    }
   };
 
   const handleSaveAsPDF = async () => {
@@ -1425,30 +1546,6 @@ export default function DbmsDashboard() {
       
       const { default: html2canvas } = await import("html2canvas");
       const { jsPDF } = await import("jspdf");
-
-      // Helper function to convert modern color strings (oklch, oklab, etc.) to standard RGB/RGBA
-      // so html2canvas doesn't crash on unsupported color functions.
-      const convertModernColorToRgba = (colorStr) => {
-        if (!colorStr || typeof colorStr !== "string") return colorStr;
-        const hasModernColor = colorStr.includes("oklch") || colorStr.includes("oklab");
-        if (!hasModernColor) return colorStr;
-        
-        try {
-          const canvas = document.createElement("canvas");
-          canvas.width = 1;
-          canvas.height = 1;
-          const ctx = canvas.getContext("2d", { willReadFrequently: true });
-          if (!ctx) return colorStr;
-          
-          ctx.fillStyle = colorStr;
-          ctx.fillRect(0, 0, 1, 1);
-          const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-          return `rgba(${r}, ${g}, ${b}, ${a / 255})`;
-        } catch (e) {
-          console.warn("Failed to convert modern color:", colorStr, e);
-          return colorStr;
-        }
-      };
 
       const canvas = await html2canvas(element, {
         scale: 2,
