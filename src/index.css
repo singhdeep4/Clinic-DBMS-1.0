@@ -104,3 +104,8 @@
     print-color-adjust: exact !important;
   }
 }
+
+/* Hide print-only elements on screen during print mode preview */
+body.print-mode-active .print\:hidden {
+  display: none !important;
+}

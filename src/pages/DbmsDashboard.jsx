@@ -400,6 +400,18 @@ export default function DbmsDashboard() {
     return () => clearTimeout(timer);
   }, [activeTab]);
 
+  // Toggle body class for print mode active state to hide global headers/footers on screen
+  useEffect(() => {
+    if (isPrintMode) {
+      document.body.classList.add("print-mode-active");
+    } else {
+      document.body.classList.remove("print-mode-active");
+    }
+    return () => {
+      document.body.classList.remove("print-mode-active");
+    };
+  }, [isPrintMode]);
+
   const handlePlanChange = (plan) => {
     setCloudPlan(plan);
     localStorage.setItem("ayurkaya_cloud_plan", plan);
@@ -2512,36 +2524,36 @@ export default function DbmsDashboard() {
   // Print Prescription View Mode
   if (isPrintMode) {
     return (
-      <div className="bg-white text-black min-h-screen p-8 md:p-16 max-w-4xl mx-auto font-sans print:p-0 print:m-0 print:max-w-none print:block space-y-8 animate-fadeIn">
+      <div className="bg-white text-black min-h-screen p-4 sm:p-8 md:p-16 max-w-4xl mx-auto font-sans print:p-0 print:m-0 print:max-w-none print:block space-y-6 sm:space-y-8 animate-fadeIn">
         <SEO title={`Case Print - ${currentCase.name || "Patient"}`} description="Ayurkaya Case Record Prescription Printout Form." />
         
         {/* Actions bar for printing */}
-        <div className="flex justify-between items-center bg-brand-cream border border-brand-light/60 p-4 rounded-2xl print:hidden shadow-sm">
+        <div className="flex flex-col lg:flex-row justify-between items-center bg-brand-cream border border-brand-light/60 p-4 rounded-2xl print:hidden shadow-sm gap-4">
           <button
             onClick={() => {
               setIsPrintMode(false);
               setViewMode(printReferrer);
             }}
-            className="flex items-center text-xs font-bold text-brand-primary hover:text-brand-secondary uppercase tracking-wider gap-1.5"
+            className="flex items-center text-xs font-bold text-brand-primary hover:text-brand-secondary uppercase tracking-wider gap-1.5 shrink-0 self-start lg:self-center"
           >
             {printReferrer === "recent_cases" ? "← Back to Case Sheets Directory" : "← Back to Workspace"}
           </button>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2 w-full lg:w-auto justify-start lg:justify-end">
             <button
               onClick={handleSendToPatientWhatsApp}
-              className="flex items-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
+              className="flex-1 lg:flex-initial flex items-center justify-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 px-3 py-2 sm:px-5 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer min-w-fit"
             >
               <MessageCircle size={14} /> Send to Patient (WhatsApp)
             </button>
             <button
               onClick={handleSaveAsPDF}
-              className="flex items-center gap-1.5 bg-brand-secondary text-brand-beige hover:bg-brand-primary px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
+              className="flex-1 lg:flex-initial flex items-center justify-center gap-1.5 bg-brand-secondary text-brand-beige hover:bg-brand-primary px-3 py-2 sm:px-5 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer min-w-fit"
             >
               <Download size={14} /> Save as PDF
             </button>
             <button
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
+              className="flex-1 lg:flex-initial flex items-center justify-center gap-1.5 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-3 py-2 sm:px-5 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer min-w-fit"
             >
               <Printer size={14} /> Send to Print / PDF
             </button>
@@ -2549,7 +2561,7 @@ export default function DbmsDashboard() {
         </div>
 
         {/* Print Content Area */}
-        <div id="case-sheet-printout" className="border-4 border-double border-emerald-950 p-6 md:p-8 space-y-8 bg-white">
+        <div id="case-sheet-printout" className="border-4 border-double border-emerald-950 p-4 sm:p-6 md:p-8 space-y-8 bg-white">
           {/* Clinic Header */}
           <div className="flex justify-between items-start border-b border-brand-primary/25 pb-6">
             <div className="space-y-1">
