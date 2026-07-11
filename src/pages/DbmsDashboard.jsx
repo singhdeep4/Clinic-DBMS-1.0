@@ -235,21 +235,26 @@ export default function DbmsDashboard() {
     }
   });
 
-  const addToRecentPatients = (patient) => {
-    if (!patient || !patient.patientId) return;
+  const addToRecentPatients = (patientCase) => {
+    if (!patientCase || !patientCase.patientId) return;
     setRecentPatients(prev => {
       const now = new Date().toISOString();
+      const visitId = patientCase.visitId || "demographics";
       const item = {
-        entryId: `${patient.patientId}_${now}`,  // unique per load event
-        patientId: patient.patientId,
-        name: patient.name || "",
-        age: patient.age || "",
-        gender: patient.gender || "Male",
-        mobile: patient.mobile || "",
+        entryId: `${patientCase.patientId}_${visitId}`,
+        patientId: patientCase.patientId,
+        visitId: visitId,
+        visitDate: patientCase.visitDate || "",
+        complaints: patientCase.complaints || [],
+        name: patientCase.name || "",
+        age: patientCase.age || "",
+        gender: patientCase.gender || "Male",
+        mobile: patientCase.mobile || "",
         loadedAt: now
       };
-      // Keep all entries (no dedup by patientId) — cap at 100 total
-      const updated = [item, ...prev].slice(0, 100);
+      // Deduplicate: remove any existing card with the same patientId and visitId
+      const filtered = prev.filter(p => !(p.patientId === item.patientId && (p.visitId || "demographics") === item.visitId));
+      const updated = [item, ...filtered].slice(0, 100);
       localStorage.setItem("ayurkaya_recent_patients", JSON.stringify(updated));
       return updated;
     });
@@ -978,7 +983,7 @@ export default function DbmsDashboard() {
         visits: allVisits.filter(v => v.visitId !== visitId) // separate history
       };
       setCurrentCase(fullActive);
-      addToRecentPatients(patientData);
+      addToRecentPatients(fullActive);
 
       // Update savedCases list (sidebar list) — include clinical fields for analytics/alerts
       const updatedSavedCase = {
@@ -1137,7 +1142,11 @@ export default function DbmsDashboard() {
       const { getPatientWithVisits } = await import("../lib/patientService.js");
       const fullRecord = await getPatientWithVisits(c.patientId);
       if (fullRecord) {
-        const activeVisit = fullRecord.visits.find(v => v.status === "active");
+        // If a specific visitId is requested, load that visit; otherwise search for an active visit
+        const activeVisit = c.visitId
+          ? fullRecord.visits.find(v => v.visitId === c.visitId)
+          : fullRecord.visits.find(v => v.status === "active");
+        
         const combined = mergeWithDefaults({
           ...fullRecord.patient,
           ...(activeVisit || {}),
@@ -1146,7 +1155,7 @@ export default function DbmsDashboard() {
             : fullRecord.visits
         });
         setCurrentCase(combined);
-        addToRecentPatients(fullRecord.patient);
+        addToRecentPatients(combined);
         setCompletedTabs({});
         setViewMode("clinical");
         setActiveTab(targetTab);
@@ -1177,13 +1186,15 @@ export default function DbmsDashboard() {
       const fullRecord = await getPatientWithVisits(patient.patientId);
       if (fullRecord) {
         const activeVisit = fullRecord.visits.find(v => v.status === "active");
-        setCurrentCase(mergeWithDefaults({
+        const combined = mergeWithDefaults({
           ...fullRecord.patient,
           ...(activeVisit || {}),
           visits: activeVisit
             ? fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
             : fullRecord.visits
-        }));
+        });
+        setCurrentCase(combined);
+        addToRecentPatients(combined);
         triggerNotification(`Loaded patient record for ${patient.name}.`);
       } else {
         setCurrentCase(prev => mergeWithDefaults({
@@ -5364,6 +5375,20 @@ export default function DbmsDashboard() {
                               <span className="text-[10px] text-brand-secondary/80 font-medium block">
                                 📞 {c.mobile}
                               </span>
+                            )}
+                            {c.visitId && c.visitId !== "demographics" && (
+                              <div className="mt-2 pt-2 border-t border-brand-light/20 space-y-1">
+                                {c.visitDate && (
+                                  <span className="text-[10px] text-brand-primary font-bold block">
+                                    📅 Case Date: {new Date(c.visitDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                                  </span>
+                                )}
+                                {c.complaints && c.complaints.length > 0 && c.complaints[0].text && (
+                                  <span className="text-[10px] text-brand-dark/65 italic block line-clamp-1" title={c.complaints.map(comp => comp.text).join(", ")}>
+                                    🩺 {c.complaints.map(comp => comp.text).join(", ")}
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
 
