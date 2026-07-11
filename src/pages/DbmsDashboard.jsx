@@ -937,6 +937,13 @@ export default function DbmsDashboard() {
     }
   };
 
+  const handleNewPatientRegistration = () => {
+    setCurrentCase({ ...DEFAULT_STATE });
+    setCompletedTabs({});
+    setActiveTab("profile");
+    triggerNotification("Cleared workspace. Ready to register new patient.");
+  };
+
   // Save Case Sheet to Firestore
   const saveCase = async () => {
     if (!currentCase.name.trim()) {
@@ -2778,6 +2785,12 @@ export default function DbmsDashboard() {
           <div className="flex items-center space-x-3">
             {viewMode === "clinical" && (
               <>
+                <button
+                  onClick={handleNewPatientRegistration}
+                  className="flex items-center gap-1.5 bg-brand-primary/10 border border-brand-primary/30 text-brand-primary hover:bg-brand-primary hover:text-brand-beige px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer"
+                >
+                  <Plus size={14} /> New Consult
+                </button>
                 <button
                   onClick={saveCase}
                   className="flex items-center gap-1.5 bg-brand-secondary text-brand-beige hover:bg-brand-primary px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
