@@ -1408,6 +1408,43 @@ export default function DbmsDashboard() {
     window.open(url, "_blank");
   };
 
+  const handleSaveAsPDF = () => {
+    if (!currentCase.name?.trim()) {
+      triggerNotification("Patient Profile name is required.");
+      return;
+    }
+    
+    if (!window.html2pdf) {
+      triggerNotification("Preparing PDF generator, please wait...");
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+      script.onload = () => {
+        generatePDF();
+      };
+      document.body.appendChild(script);
+    } else {
+      generatePDF();
+    }
+
+    function generatePDF() {
+      const element = document.getElementById("case-sheet-printout");
+      if (!element) {
+        triggerNotification("Could not find printout content!");
+        return;
+      }
+
+      const opt = {
+        margin:       [10, 10, 10, 10],
+        filename:     `Ayurkaya_Rx_${currentCase.name.trim().replace(/\s+/g, "_")}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      window.html2pdf().set(opt).from(element).save();
+    }
+  };
+
   // Delete Case from database
   const deleteCaseRecord = async (id, e) => {
     e.stopPropagation();
@@ -2339,6 +2376,12 @@ export default function DbmsDashboard() {
               <MessageCircle size={14} /> Send to Patient (WhatsApp)
             </button>
             <button
+              onClick={handleSaveAsPDF}
+              className="flex items-center gap-1.5 bg-brand-secondary text-brand-beige hover:bg-brand-primary px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
+            >
+              <Download size={14} /> Save as PDF
+            </button>
+            <button
               onClick={() => window.print()}
               className="flex items-center gap-1.5 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
             >
@@ -2348,7 +2391,7 @@ export default function DbmsDashboard() {
         </div>
 
         {/* Print Content Area */}
-        <div className="border-4 border-double border-emerald-950 p-6 md:p-8 space-y-8">
+        <div id="case-sheet-printout" className="border-4 border-double border-emerald-950 p-6 md:p-8 space-y-8 bg-white">
           {/* Clinic Header */}
           <div className="flex justify-between items-start border-b border-brand-primary/25 pb-6">
             <div className="space-y-1">
