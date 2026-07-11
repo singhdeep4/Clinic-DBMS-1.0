@@ -5605,68 +5605,70 @@ export default function DbmsDashboard() {
                       : "No cases match your current search or filter."}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredRecents.map((c) => {
-                      const loadedDate = c.visitDate ? new Date(c.visitDate) : null;
-                      const dateStr = loadedDate
-                        ? loadedDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
-                        : null;
-                      const timeStr = loadedDate
-                        ? loadedDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
-                        : null;
-                      return (
-                        <div
-                          key={c.entryId}
-                          onClick={() => selectCase(c, "profile", true)}
-                          className="bg-brand-beige hover:bg-brand-light/15 border border-brand-light/45 p-4 rounded-2xl transition-all cursor-pointer hover:border-brand-primary flex flex-col justify-between group shadow-sm animate-fadeIn"
-                        >
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between items-center">
-                              <h4 className="font-serif font-bold text-brand-primary text-sm group-hover:text-brand-secondary transition-colors line-clamp-1">
-                                {c.name}
-                              </h4>
-                              <span className="font-mono text-[9px] font-bold text-brand-secondary bg-brand-light/20 px-2 py-0.5 rounded shrink-0">
-                                {c.patientId}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-brand-dark/65 font-semibold">
-                              <span>{c.age || "N/A"} Yrs • {c.gender}</span>
-                              {c.mobile && (
-                                <>
-                                  <span className="text-brand-light/40 font-normal">|</span>
-                                  <span className="text-brand-secondary/80 font-medium">📞 {c.mobile}</span>
-                                </>
-                              )}
-                            </div>
-                            {c.complaints && c.complaints.length > 0 && c.complaints[0].text && (
-                              <div className="mt-1 pt-1.5 border-t border-brand-light/20">
-                                <span className="text-[10px] text-brand-dark/65 italic block line-clamp-1" title={c.complaints.map(comp => comp.text).join(", ")}>
-                                  🩺 {c.complaints.map(comp => comp.text).join(", ")}
+                  <div className="max-h-[calc(100vh-350px)] lg:max-h-[calc(100vh-310px)] overflow-y-auto pr-1.5 custom-scrollbar">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredRecents.map((c) => {
+                        const loadedDate = c.visitDate ? new Date(c.visitDate) : null;
+                        const dateStr = loadedDate
+                          ? loadedDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                          : null;
+                        const timeStr = loadedDate
+                          ? loadedDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
+                          : null;
+                        return (
+                          <div
+                            key={c.entryId}
+                            onClick={() => selectCase(c, "profile", true)}
+                            className="bg-brand-beige hover:bg-brand-light/15 border border-brand-light/45 p-4 rounded-2xl transition-all cursor-pointer hover:border-brand-primary flex flex-col justify-between group shadow-sm animate-fadeIn"
+                          >
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between items-center">
+                                <h4 className="font-serif font-bold text-brand-primary text-sm group-hover:text-brand-secondary transition-colors line-clamp-1">
+                                  {c.name}
+                                </h4>
+                                <span className="font-mono text-[9px] font-bold text-brand-secondary bg-brand-light/20 px-2 py-0.5 rounded shrink-0">
+                                  {c.patientId}
                                 </span>
                               </div>
-                            )}
-                          </div>
-
-                          <div className="mt-3 border-t border-brand-light/35 pt-2.5 flex items-center justify-between">
-                            {dateStr ? (
-                              <div className="text-[9px] font-semibold text-brand-dark/45">
-                                <span className="text-brand-primary font-bold">{dateStr}</span>
-                                <span className="text-brand-dark/35 ml-1 hidden sm:inline">• {timeStr}</span>
+                              <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-brand-dark/65 font-semibold">
+                                <span>{c.age || "N/A"} Yrs • {c.gender}</span>
+                                {c.mobile && (
+                                  <>
+                                    <span className="text-brand-light/40 font-normal">|</span>
+                                    <span className="text-brand-secondary/80 font-medium">📞 {c.mobile}</span>
+                                  </>
+                                )}
                               </div>
-                            ) : (
-                              <span className="text-[9px] text-brand-dark/30 italic">No timestamp</span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); selectCase(c, "profile", true); }}
-                              className="text-[10px] font-bold uppercase tracking-wider text-brand-primary group-hover:text-brand-accent flex items-center gap-0.5 transition-colors cursor-pointer"
-                            >
-                              View Case ➔
-                            </button>
+                              {c.complaints && c.complaints.length > 0 && c.complaints[0].text && (
+                                <div className="mt-1 pt-1.5 border-t border-brand-light/20">
+                                  <span className="text-[10px] text-brand-dark/65 italic block line-clamp-1" title={c.complaints.map(comp => comp.text).join(", ")}>
+                                    🩺 {c.complaints.map(comp => comp.text).join(", ")}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="mt-3 border-t border-brand-light/35 pt-2.5 flex items-center justify-between">
+                              {dateStr ? (
+                                <div className="text-[9px] font-semibold text-brand-dark/45">
+                                  <span className="text-brand-primary font-bold">{dateStr}</span>
+                                  <span className="text-brand-dark/35 ml-1 hidden sm:inline">• {timeStr}</span>
+                                </div>
+                              ) : (
+                                <span className="text-[9px] text-brand-dark/30 italic">No timestamp</span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); selectCase(c, "profile", true); }}
+                                className="text-[10px] font-bold uppercase tracking-wider text-brand-primary group-hover:text-brand-accent flex items-center gap-0.5 transition-colors cursor-pointer"
+                              >
+                                View Case ➔
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
