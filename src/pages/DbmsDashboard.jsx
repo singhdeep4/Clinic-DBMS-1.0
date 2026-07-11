@@ -267,6 +267,7 @@ export default function DbmsDashboard() {
   const [currentCase, setCurrentCase] = useState({ ...DEFAULT_STATE });
   const [searchTerm, setSearchTerm] = useState("");
   const [isPrintMode, setIsPrintMode] = useState(false);
+  const [printReferrer, setPrintReferrer] = useState("clinical");
   const [notification, setNotification] = useState("");
   const [showSidebar, setShowSidebar] = useState(window.innerWidth >= 1024);
 
@@ -1152,6 +1153,9 @@ export default function DbmsDashboard() {
             ? fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
             : fullRecord.visits
         });
+        if (openPrintMode) {
+          setPrintReferrer(viewMode);
+        }
         setCurrentCase(combined);
         setCompletedTabs({});
         setViewMode("clinical");
@@ -1162,6 +1166,9 @@ export default function DbmsDashboard() {
         }
         triggerNotification(`Loaded record of ${fullRecord.patient.name}`);
       } else {
+        if (openPrintMode) {
+          setPrintReferrer(viewMode);
+        }
         setCurrentCase(mergeWithDefaults({ ...c }));
         setCompletedTabs({});
         setViewMode("clinical");
@@ -1174,6 +1181,9 @@ export default function DbmsDashboard() {
       }
     } catch (err) {
       console.error("Error selecting patient:", err);
+      if (openPrintMode) {
+        setPrintReferrer(viewMode);
+      }
       setCurrentCase(mergeWithDefaults({ ...c }));
       setCompletedTabs({});
       setViewMode("clinical");
@@ -2227,10 +2237,13 @@ export default function DbmsDashboard() {
         {/* Actions bar for printing */}
         <div className="flex justify-between items-center bg-brand-cream border border-brand-light/60 p-4 rounded-2xl print:hidden shadow-sm">
           <button
-            onClick={() => setIsPrintMode(false)}
-            className="flex items-center text-xs font-bold text-brand-primary hover:text-brand-secondary uppercase tracking-wider"
+            onClick={() => {
+              setIsPrintMode(false);
+              setViewMode(printReferrer);
+            }}
+            className="flex items-center text-xs font-bold text-brand-primary hover:text-brand-secondary uppercase tracking-wider gap-1.5"
           >
-            ← Back to System Editor
+            {printReferrer === "recent_cases" ? "← Back to Case Sheets Directory" : "← Back to Workspace"}
           </button>
           <div className="flex gap-3">
             <button
@@ -2717,6 +2730,7 @@ export default function DbmsDashboard() {
                       triggerNotification("Must save patient profile with a name first!");
                       return;
                     }
+                    setPrintReferrer("clinical");
                     setIsPrintMode(true);
                   }}
                   className="flex items-center gap-1.5 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
