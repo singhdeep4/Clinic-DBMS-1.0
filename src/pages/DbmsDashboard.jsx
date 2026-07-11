@@ -1135,7 +1135,7 @@ export default function DbmsDashboard() {
   };
 
   // Load selected case into active editor
-  async function selectCase(c, targetTab = "profile") {
+  async function selectCase(c, targetTab = "profile", openPrintMode = false) {
     try {
       const { getPatientWithVisits } = await import("../lib/patientService.js");
       const fullRecord = await getPatientWithVisits(c.patientId);
@@ -1157,6 +1157,9 @@ export default function DbmsDashboard() {
         setViewMode("clinical");
         setActiveTab(targetTab);
         closeSidebarOnMobile();
+        if (openPrintMode) {
+          setIsPrintMode(true);
+        }
         triggerNotification(`Loaded record of ${fullRecord.patient.name}`);
       } else {
         setCurrentCase(mergeWithDefaults({ ...c }));
@@ -1164,6 +1167,9 @@ export default function DbmsDashboard() {
         setViewMode("clinical");
         setActiveTab(targetTab);
         closeSidebarOnMobile();
+        if (openPrintMode) {
+          setIsPrintMode(true);
+        }
         triggerNotification(`Loaded record of ${c.name}`);
       }
     } catch (err) {
@@ -1172,6 +1178,9 @@ export default function DbmsDashboard() {
       setCompletedTabs({});
       setViewMode("clinical");
       setActiveTab(targetTab);
+      if (openPrintMode) {
+        setIsPrintMode(true);
+      }
     }
   }
 
@@ -5287,7 +5296,7 @@ export default function DbmsDashboard() {
                       return (
                         <div
                           key={c.entryId}
-                          onClick={() => selectCase(c)}
+                          onClick={() => selectCase(c, "profile", true)}
                           className="bg-brand-beige hover:bg-brand-light/15 border border-brand-light/45 p-5 rounded-2xl transition-all cursor-pointer hover:border-brand-primary flex flex-col justify-between group shadow-sm animate-fadeIn"
                         >
                           <div className="space-y-2">
@@ -5328,10 +5337,10 @@ export default function DbmsDashboard() {
                             )}
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); selectCase(c); }}
+                              onClick={(e) => { e.stopPropagation(); selectCase(c, "profile", true); }}
                               className="flex items-center gap-1 bg-brand-primary text-brand-beige hover:bg-brand-secondary px-3.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
                             >
-                              Open Case
+                              View Case
                             </button>
                           </div>
                         </div>
