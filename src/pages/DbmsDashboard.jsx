@@ -1,5 +1,5 @@
 import { startRealtimeListeners } from "../lib/realtime.js";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   User, Plus, Trash2, History,
@@ -227,38 +227,25 @@ export default function DbmsDashboard() {
   
   const [activeTab, setActiveTab] = useState("profile"); // active clinical tab
   const [completedTabs, setCompletedTabs] = useState({});
-  const [recentPatients, setRecentPatients] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("ayurkaya_recent_patients") || "[]");
-    } catch {
-      return [];
-    }
-  });
+  const [dbVisits, setDbVisits] = useState([]);
+  const [dbPatients, setDbPatients] = useState([]);
 
-  const addToRecentPatients = (patientCase) => {
-    if (!patientCase || !patientCase.patientId) return;
-    setRecentPatients(prev => {
-      const now = new Date().toISOString();
-      const visitId = patientCase.visitId || "demographics";
-      const item = {
-        entryId: `${patientCase.patientId}_${visitId}`,
-        patientId: patientCase.patientId,
-        visitId: visitId,
-        visitDate: patientCase.visitDate || "",
-        complaints: patientCase.complaints || [],
-        name: patientCase.name || "",
-        age: patientCase.age || "",
-        gender: patientCase.gender || "Male",
-        mobile: patientCase.mobile || "",
-        loadedAt: now
+  const allVisitsCases = useMemo(() => {
+    return dbVisits.map(v => {
+      const patient = dbPatients.find(p => p.patientId === v.patientId) || {};
+      return {
+        entryId: `${v.patientId}_${v.visitId}`,
+        patientId: v.patientId,
+        visitId: v.visitId,
+        visitDate: v.visitDate,
+        complaints: v.chiefComplaints || v.complaints || [],
+        name: patient.name || "Unknown Patient",
+        age: patient.age || "",
+        gender: patient.gender || "Male",
+        mobile: patient.mobile || ""
       };
-      // Deduplicate: remove any existing card with the same patientId and visitId
-      const filtered = prev.filter(p => !(p.patientId === item.patientId && (p.visitId || "demographics") === item.visitId));
-      const updated = [item, ...filtered].slice(0, 100);
-      localStorage.setItem("ayurkaya_recent_patients", JSON.stringify(updated));
-      return updated;
-    });
-  };
+    }).sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
+  }, [dbVisits, dbPatients]);
   const [savedCases, setSavedCases] = useState([]);
   const [matchingPatients, setMatchingPatients] = useState([]);
   const [duplicatePatientFound, setDuplicatePatientFound] = useState(null);
@@ -503,6 +490,9 @@ export default function DbmsDashboard() {
         const patientsList = await getAllItems("patients");
         const visits = await getAllItems("visits");
         console.log(`[Dashboard] Loaded ${patientsList.length} patients, ${visits.length} visits`);
+        
+        setDbPatients(patientsList);
+        setDbVisits(visits);
         
         const patientVisitsMap = {};
 
@@ -983,7 +973,6 @@ export default function DbmsDashboard() {
         visits: allVisits.filter(v => v.visitId !== visitId) // separate history
       };
       setCurrentCase(fullActive);
-      addToRecentPatients(fullActive);
 
       // Update savedCases list (sidebar list) — include clinical fields for analytics/alerts
       const updatedSavedCase = {
@@ -1155,7 +1144,6 @@ export default function DbmsDashboard() {
             : fullRecord.visits
         });
         setCurrentCase(combined);
-        addToRecentPatients(combined);
         setCompletedTabs({});
         setViewMode("clinical");
         setActiveTab(targetTab);
@@ -1163,7 +1151,6 @@ export default function DbmsDashboard() {
         triggerNotification(`Loaded record of ${fullRecord.patient.name}`);
       } else {
         setCurrentCase(mergeWithDefaults({ ...c }));
-        addToRecentPatients(c);
         setCompletedTabs({});
         setViewMode("clinical");
         setActiveTab(targetTab);
@@ -1173,7 +1160,6 @@ export default function DbmsDashboard() {
     } catch (err) {
       console.error("Error selecting patient:", err);
       setCurrentCase(mergeWithDefaults({ ...c }));
-      addToRecentPatients(c);
       setCompletedTabs({});
       setViewMode("clinical");
       setActiveTab(targetTab);
@@ -1194,7 +1180,6 @@ export default function DbmsDashboard() {
             : fullRecord.visits
         });
         setCurrentCase(combined);
-        addToRecentPatients(combined);
         triggerNotification(`Loaded patient record for ${patient.name}.`);
       } else {
         setCurrentCase(prev => mergeWithDefaults({
@@ -1759,8 +1744,6 @@ export default function DbmsDashboard() {
           setLiveQueue([]);
           setCurrentCase({ ...DEFAULT_STATE });
           setCompletedTabs({});
-          setRecentPatients([]);
-          localStorage.removeItem("ayurkaya_recent_patients");
 
           // Refresh storage metrics to reflect the empty database
           const { getStorageMetrics } = await import("../lib/archiveService.js");
@@ -2584,6 +2567,17 @@ export default function DbmsDashboard() {
               <span>Workspace</span>
             </button>
             <button
+              onClick={() => { setViewMode("recent_cases"); closeSidebarOnMobile(); }}
+              className={`flex items-center gap-2.5 px-4.5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer relative ${
+                viewMode === "recent_cases" 
+                  ? "bg-brand-primary text-brand-beige shadow-sm" 
+                  : "bg-brand-beige text-brand-primary hover:bg-brand-light/45"
+              }`}
+            >
+              <History size={15} />
+              <span>Case Sheets Directory</span>
+            </button>
+            <button
               onClick={() => { setViewMode("walkins"); closeSidebarOnMobile(); }}
               className={`flex items-center gap-2.5 px-4.5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer relative ${
                 viewMode === "walkins" 
@@ -2645,83 +2639,11 @@ export default function DbmsDashboard() {
           </div>
         </div>
         {/* Sidebar Case Sheets list (Only show when in clinical workspace) */}
-        {viewMode === "clinical" ? (
-          <div className="flex-grow flex flex-col min-h-0">
-            <div className="p-4 border-b border-brand-light/60">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest">
-                  Recent Case Sheets
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => {
-                      setViewMode("recent_cases");
-                      closeSidebarOnMobile();
-                    }}
-                    className={`p-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                      viewMode === "recent_cases" 
-                        ? "bg-brand-primary text-brand-beige" 
-                        : "bg-brand-light text-brand-primary hover:bg-brand-light/75 border border-brand-primary/10"
-                    }`}
-                    title="View all recent case files"
-                  >
-                    <History size={14} />
-                  </button>
-                  <button
-                    onClick={startNewCase}
-                    className="bg-brand-primary text-brand-beige hover:bg-brand-secondary p-1.5 rounded-lg text-xs font-bold uppercase transition-colors cursor-pointer"
-                    title="New consultation"
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-grow overflow-y-auto max-h-[30vh] lg:max-h-none divide-y divide-brand-light/35">
-              {recentPatients.length === 0 ? (
-                <div className="p-6 text-center text-xs text-brand-dark/50 font-sans">
-                  No recent cases loaded. Use "Walk-ins & Search" to look up patients.
-                </div>
-              ) : (
-                recentPatients.slice(0, 3).map((c) => (
-                  <div
-                    key={c.entryId || (c.patientId + (c.loadedAt || ""))}
-                    onClick={() => selectCase(c)}
-                    className={`w-full text-left p-4 hover:bg-brand-light/25 transition-colors cursor-pointer ${
-                      currentCase.patientId === c.patientId ? "bg-brand-light/30 border-l-4 border-brand-primary" : ""
-                    }`}
-                  >
-                    <div className="space-y-1 pr-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h4 className="font-serif font-bold text-brand-primary text-sm line-clamp-1">
-                          {c.name}
-                        </h4>
-                        <span className="font-mono text-[9px] font-semibold text-brand-secondary bg-brand-light/25 px-1.5 py-0.5 rounded">
-                          {c.patientId}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-brand-secondary font-semibold uppercase">
-                        {c.age} Yrs • {c.gender}
-                      </p>
-                      {c.mobile && (
-                        <p className="text-[10px] text-brand-dark/60 font-medium">
-                          {c.mobile}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="flex-grow hidden lg:block p-6 text-center text-xs text-brand-secondary/65 leading-relaxed border-b border-brand-light/30">
-            <Shield size={36} className="mx-auto text-brand-secondary/30 mb-2" />
-            <p><strong>Secure Connection</strong></p>
-            <p className="text-[10px] mt-1">Firestore stores workspace data in the cloud so your clinic records remain available across browsers and devices.</p>
-          </div>
-        )}
+        <div className="flex-grow hidden lg:block p-6 text-center text-xs text-brand-secondary/65 leading-relaxed border-b border-brand-light/30">
+          <Shield size={36} className="mx-auto text-brand-secondary/30 mb-2" />
+          <p><strong>Secure Connection</strong></p>
+          <p className="text-[10px] mt-1">Firestore stores workspace data in the cloud so your clinic records remain available across browsers and devices.</p>
+        </div>
 
         {/* Footer actions inside sidebar */}
         <div className="p-4 border-t border-brand-light/60 bg-brand-beige/40 flex justify-between items-center text-xs text-brand-secondary font-semibold shrink-0">
@@ -5246,16 +5168,16 @@ export default function DbmsDashboard() {
 
           {/* ==================== VIEW 6: ALL RECENT CASES ==================== */}
           {viewMode === "recent_cases" && (() => {
-            // Derive unique year options from loaded timestamps
+            // Derive unique year options from visit dates
             const availableYears = [...new Set(
-              recentPatients
-                .filter(p => p.loadedAt)
-                .map(p => new Date(p.loadedAt).getFullYear())
+              allVisitsCases
+                .filter(p => p.visitDate)
+                .map(p => new Date(p.visitDate).getFullYear())
             )].sort((a, b) => b - a);
 
             const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-            const filteredRecents = recentPatients.filter(c => {
+            const filteredRecents = allVisitsCases.filter(c => {
               const q = recentSearch.toLowerCase();
               const matchSearch = !q || (
                 (c.name || "").toLowerCase().includes(q) ||
@@ -5264,8 +5186,8 @@ export default function DbmsDashboard() {
               );
               let matchMonth = true;
               let matchYear = true;
-              if (c.loadedAt) {
-                const d = new Date(c.loadedAt);
+              if (c.visitDate) {
+                const d = new Date(c.visitDate);
                 if (recentMonthFilter) matchMonth = d.getMonth() === parseInt(recentMonthFilter);
                 if (recentYearFilter) matchYear = d.getFullYear() === parseInt(recentYearFilter);
               } else {
@@ -5281,14 +5203,14 @@ export default function DbmsDashboard() {
                   <div className="flex justify-between items-center flex-wrap gap-4">
                     <h3 className="font-serif text-2xl font-bold text-brand-primary flex items-center gap-2">
                       <History size={24} className="text-brand-secondary" />
-                      <span>Directory of Recently Loaded Case Sheets</span>
+                      <span>Directory of All Case Sheets</span>
                     </h3>
                     <span className="bg-brand-light border border-brand-primary/20 text-brand-primary text-xs font-bold px-3 py-1 rounded-full">
-                      {filteredRecents.length} / {recentPatients.length} Shown
+                      {filteredRecents.length} / {allVisitsCases.length} Shown
                     </span>
                   </div>
                   <p className="text-xs text-brand-dark/70 font-sans leading-relaxed">
-                    Recently accessed patient profiles. Click any card to load it into the clinical workspace.
+                    All consultation and case files stored in the cloud database. Click any card to load it into the clinical workspace.
                   </p>
                 </div>
 
@@ -5339,14 +5261,14 @@ export default function DbmsDashboard() {
 
                 {filteredRecents.length === 0 ? (
                   <div className="py-16 text-center text-xs text-brand-dark/45 border border-dashed border-brand-light/60 rounded-3xl bg-brand-beige/25">
-                    {recentPatients.length === 0
-                      ? 'No recently loaded cases found. Use "Walk-ins & Search" to look up patients.'
+                    {allVisitsCases.length === 0
+                      ? 'No case sheets found in the database. Use "Walk-ins & Search" to register and consult patients.'
                       : "No cases match your current search or filter."}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {filteredRecents.map((c) => {
-                      const loadedDate = c.loadedAt ? new Date(c.loadedAt) : null;
+                      const loadedDate = c.visitDate ? new Date(c.visitDate) : null;
                       const dateStr = loadedDate
                         ? loadedDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
                         : null;
@@ -5355,7 +5277,7 @@ export default function DbmsDashboard() {
                         : null;
                       return (
                         <div
-                          key={c.entryId || (c.patientId + (c.loadedAt || ""))}
+                          key={c.entryId}
                           onClick={() => selectCase(c)}
                           className="bg-brand-beige hover:bg-brand-light/15 border border-brand-light/45 p-5 rounded-2xl transition-all cursor-pointer hover:border-brand-primary flex flex-col justify-between group shadow-sm animate-fadeIn"
                         >
@@ -5376,18 +5298,11 @@ export default function DbmsDashboard() {
                                 📞 {c.mobile}
                               </span>
                             )}
-                            {c.visitId && c.visitId !== "demographics" && (
-                              <div className="mt-2 pt-2 border-t border-brand-light/20 space-y-1">
-                                {c.visitDate && (
-                                  <span className="text-[10px] text-brand-primary font-bold block">
-                                    📅 Case Date: {new Date(c.visitDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                                  </span>
-                                )}
-                                {c.complaints && c.complaints.length > 0 && c.complaints[0].text && (
-                                  <span className="text-[10px] text-brand-dark/65 italic block line-clamp-1" title={c.complaints.map(comp => comp.text).join(", ")}>
-                                    🩺 {c.complaints.map(comp => comp.text).join(", ")}
-                                  </span>
-                                )}
+                            {c.complaints && c.complaints.length > 0 && c.complaints[0].text && (
+                              <div className="mt-2 pt-2 border-t border-brand-light/20">
+                                <span className="text-[10px] text-brand-dark/65 italic block line-clamp-1" title={c.complaints.map(comp => comp.text).join(", ")}>
+                                  🩺 {c.complaints.map(comp => comp.text).join(", ")}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -5395,7 +5310,7 @@ export default function DbmsDashboard() {
                           <div className="mt-4 border-t border-brand-light/35 pt-3 flex items-center justify-between">
                             {dateStr ? (
                               <div className="flex flex-col">
-                                <span className="text-[10px] font-bold text-brand-dark/50 uppercase tracking-wider">Loaded</span>
+                                <span className="text-[10px] font-bold text-brand-dark/50 uppercase tracking-wider">Created</span>
                                 <span className="text-[11px] font-semibold text-brand-primary">{dateStr}</span>
                                 <span className="text-[10px] text-brand-dark/45">{timeStr}</span>
                               </div>
