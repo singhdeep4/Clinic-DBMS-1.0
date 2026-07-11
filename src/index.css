@@ -103,9 +103,16 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+
+  /* Override fixed width on actual print sheet to fit standard A4 paper */
+  #case-sheet-printout {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
 }
 
-/* Hide print-only elements on screen during print mode preview */
-body.print-mode-active .print\:hidden {
+/* Hide global navbar & footer elements on screen during print mode preview */
+body.print-mode-active .global-nav-print-hidden {
   display: none !important;
 }

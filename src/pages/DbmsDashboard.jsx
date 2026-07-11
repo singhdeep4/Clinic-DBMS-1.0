@@ -2561,7 +2561,11 @@ export default function DbmsDashboard() {
         </div>
 
         {/* Print Content Area */}
-        <div id="case-sheet-printout" className="border-4 border-double border-emerald-950 p-4 sm:p-6 md:p-8 space-y-8 bg-white">
+        <div className="overflow-x-auto w-full flex justify-start md:justify-center py-4 bg-brand-cream/40 rounded-2xl border border-brand-light/60">
+          <div 
+            id="case-sheet-printout" 
+            className="w-[800px] shrink-0 border-4 border-double border-emerald-950 p-8 space-y-8 bg-white text-black font-sans"
+          >
           {/* Clinic Header */}
           <div className="flex justify-between items-start border-b border-brand-primary/25 pb-6">
             <div className="space-y-1">
@@ -2812,6 +2816,7 @@ export default function DbmsDashboard() {
               <p className="font-bold text-gray-900">Dr. Neha</p>
               <p className="text-[10px] uppercase font-bold text-gray-400">Consultant Signature</p>
             </div>
+          </div>
           </div>
         </div>
       </div>
