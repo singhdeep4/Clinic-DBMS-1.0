@@ -1203,21 +1203,32 @@ export default function DbmsDashboard() {
       const { getPatientWithVisits } = await import("../lib/patientService.js");
       const fullRecord = await getPatientWithVisits(c.patientId);
       if (fullRecord) {
-        // If a specific visitId is requested, load that visit; otherwise search for an active visit
-        const activeVisit = c.visitId
-          ? fullRecord.visits.find(v => v.visitId === c.visitId)
-          : fullRecord.visits.find(v => v.status === "active");
-        
-        const combined = mergeWithDefaults({
-          ...fullRecord.patient,
-          ...(activeVisit || {}),
-          visits: activeVisit
-            ? fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
-            : fullRecord.visits
-        });
+        let combined;
         if (openPrintMode) {
+          // If viewing print/case sheet, load specific or active visit details
+          const activeVisit = c.visitId
+            ? fullRecord.visits.find(v => v.visitId === c.visitId)
+            : fullRecord.visits.find(v => v.status === "active");
+          
+          combined = mergeWithDefaults({
+            ...fullRecord.patient,
+            ...(activeVisit || {}),
+            visits: activeVisit
+              ? fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
+              : fullRecord.visits
+          });
           setPrintReferrer(viewMode);
+        } else {
+          // If searching or opening patient to consult, load demographics but keep clinical fields as clean defaults
+          combined = mergeWithDefaults({
+            ...fullRecord.patient,
+            visits: fullRecord.visits
+          });
+          combined.visitId = `VIS-${c.patientId}-${Date.now()}`;
+          combined.visitDate = new Date().toISOString();
+          combined.status = "active";
         }
+        
         setCurrentCase(combined);
         setCompletedTabs({});
         setViewMode("clinical");
@@ -1261,15 +1272,17 @@ export default function DbmsDashboard() {
       const { getPatientWithVisits } = await import("../lib/patientService.js");
       const fullRecord = await getPatientWithVisits(patient.patientId);
       if (fullRecord) {
-        const activeVisit = fullRecord.visits.find(v => v.status === "active");
+        // Load demographics only, keep clinical fields as clean defaults
         const combined = mergeWithDefaults({
           ...fullRecord.patient,
-          ...(activeVisit || {}),
-          visits: activeVisit
-            ? fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
-            : fullRecord.visits
+          visits: fullRecord.visits
         });
+        combined.visitId = `VIS-${patient.patientId}-${Date.now()}`;
+        combined.visitDate = new Date().toISOString();
+        combined.status = "active";
+        
         setCurrentCase(combined);
+        setCompletedTabs({});
         triggerNotification(`Loaded patient record for ${patient.name}.`);
       } else {
         setCurrentCase(prev => mergeWithDefaults({
