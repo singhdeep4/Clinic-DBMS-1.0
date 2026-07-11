@@ -1890,7 +1890,7 @@ export default function DbmsDashboard() {
       label = "1 year";
     }
 
-    if (!window.confirm(`This will perform a historical purge sweep for visits older than ${label}.\n\nFor every patient, the system will:\n1. Keep all basic profile and contact details intact.\n2. STRICTLY KEEP their most recent visit (regardless of its date, so they always retain at least one consult history).\n3. Delete older historical visits and archives beyond the ${label} threshold to save space.\n\nDo you want to proceed?`)) {
+    if (!window.confirm(`This will perform a historical purge sweep for visits older than ${label}.\n\nFor every patient, the system will:\n1. Keep all basic profile and contact details intact.\n2. Delete all active and archived visits older than the ${label} threshold.\n\nDo you want to proceed?`)) {
       return;
     }
 
@@ -1927,34 +1927,14 @@ export default function DbmsDashboard() {
           ...docSnap.data()
         }));
 
-        // Combine and sort descending (index 0 is the most recent visit)
+        // Combine
         const allVisits = [
           ...patientVisits.map(v => ({ ...v, type: "active" })),
           ...patientArchives.map(a => ({ ...a, type: "archive" }))
-        ].sort((a, b) => new Date(b.visitDate || b.data?.visitDate || 0) - new Date(a.visitDate || a.data?.visitDate || 0));
+        ];
 
-        if (allVisits.length <= 1) {
-          // Patient has 0 or 1 visit in total. We keep it regardless of age.
-          continue;
-        }
-
-        // 1. Ensure the newest visit (allVisits[0]) is active (restore if it was archived)
-        const newestVisit = allVisits[0];
-        if (newestVisit.type === "archive") {
-          const visitToRestore = {
-            ...newestVisit.data,
-            status: "completed"
-          };
-          delete visitToRestore.archiveId;
-          delete visitToRestore.archivedAt;
-          delete visitToRestore.archivedReason;
-          await putItem("visits", visitToRestore);
-          await deleteItem("archived_records", newestVisit.id);
-        }
-
-        // 2. Process all older visits (from index 1 onwards)
-        const olderVisits = allVisits.slice(1);
-        for (const visit of olderVisits) {
+        // Process all visits matching the threshold
+        for (const visit of allVisits) {
           const visitDateStr = visit.visitDate || visit.data?.visitDate;
           if (!visitDateStr) continue;
           
@@ -4990,7 +4970,7 @@ export default function DbmsDashboard() {
                     <Trash2 className="text-emerald-600 animate-pulse" size={28} />
                     <h4 className="font-serif font-bold text-base text-brand-primary">3. Historical Visit Purge</h4>
                     <p className="text-xs text-brand-dark/65 leading-relaxed font-sans">
-                      Delete older consultations and timelines to save space. Strictly preserves each patient's basic profile details and their absolute latest visit.
+                      Delete older consultations and timelines to save space. Strictly preserves each patient's basic profile details.
                     </p>
                     <div className="space-y-1.5 mt-4">
                       <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider">Purge visits older than:</label>
@@ -4999,11 +4979,11 @@ export default function DbmsDashboard() {
                         onChange={(e) => setCleanupThreshold(e.target.value)}
                         className="w-full bg-brand-beige border border-brand-light/75 px-3 py-2 rounded-xl text-xs font-semibold text-brand-secondary focus:outline-none cursor-pointer"
                       >
-                        <option value="1m">1 Month (Keep most recent)</option>
-                        <option value="3m">3 Months (Keep most recent)</option>
-                        <option value="6m">6 Months (Keep most recent)</option>
-                        <option value="9m">9 Months (Keep most recent)</option>
-                        <option value="1y">1 Year (Keep most recent)</option>
+                        <option value="1m">Older than 1 Month</option>
+                        <option value="3m">Older than 3 Months</option>
+                        <option value="6m">Older than 6 Months</option>
+                        <option value="9m">Older than 9 Months</option>
+                        <option value="1y">Older than 1 Year</option>
                       </select>
                     </div>
                   </div>
