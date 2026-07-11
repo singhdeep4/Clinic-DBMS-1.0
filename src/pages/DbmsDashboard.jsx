@@ -1408,40 +1408,56 @@ export default function DbmsDashboard() {
     window.open(url, "_blank");
   };
 
-  const handleSaveAsPDF = () => {
+  const handleSaveAsPDF = async () => {
     if (!currentCase.name?.trim()) {
       triggerNotification("Patient Profile name is required.");
       return;
     }
-    
-    if (!window.html2pdf) {
-      triggerNotification("Preparing PDF generator, please wait...");
-      const script = document.createElement("script");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-      script.onload = () => {
-        generatePDF();
-      };
-      document.body.appendChild(script);
-    } else {
-      generatePDF();
+
+    const element = document.getElementById("case-sheet-printout");
+    if (!element) {
+      triggerNotification("Could not find printout content!");
+      return;
     }
 
-    function generatePDF() {
-      const element = document.getElementById("case-sheet-printout");
-      if (!element) {
-        triggerNotification("Could not find printout content!");
-        return;
+    try {
+      triggerNotification("Generating PDF, please wait...");
+      
+      const { default: html2canvas } = await import("html2canvas");
+      const { default: jsPDF } = await import("jspdf");
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff"
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      
+      // Calculate layout to scale the page correctly to A4 dimensions
+      const imgWidth = 190; // A4 page width minus margins
+      const pageHeight = 295;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 10; // Top margin
+
+      pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight + 10;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
       }
 
-      const opt = {
-        margin:       [10, 10, 10, 10],
-        filename:     `Ayurkaya_Rx_${currentCase.name.trim().replace(/\s+/g, "_")}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-
-      window.html2pdf().set(opt).from(element).save();
+      pdf.save(`Ayurkaya_Rx_${currentCase.name.trim().replace(/\s+/g, "_")}.pdf`);
+      triggerNotification("PDF downloaded successfully!");
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      triggerNotification("Failed to generate PDF. Please try Print / Save as PDF.");
     }
   };
 
