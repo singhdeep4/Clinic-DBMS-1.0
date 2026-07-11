@@ -231,19 +231,33 @@ export default function DbmsDashboard() {
   const [dbPatients, setDbPatients] = useState([]);
 
   const allVisitsCases = useMemo(() => {
-    return dbVisits.map(v => {
+    const visitsMapped = dbVisits.map(v => {
       const patient = dbPatients.find(p => p.patientId === v.patientId) || {};
       return {
         entryId: `${v.patientId}_${v.visitId}`,
         patientId: v.patientId,
         visitId: v.visitId,
         visitDate: v.visitDate,
+        status: v.status || "active",
         complaints: v.chiefComplaints || v.complaints || [],
         name: patient.name || "Unknown Patient",
         age: patient.age || "",
         gender: patient.gender || "Male",
         mobile: patient.mobile || ""
       };
+    });
+
+    // Filter out active follow-up drafts initialized at the same time as a completed visit
+    return visitsMapped.filter((v, idx, self) => {
+      if (v.status === "active") {
+        const hasCompletedSibling = self.some(other => 
+          other.patientId === v.patientId && 
+          other.status === "completed" && 
+          Math.abs(new Date(other.visitDate) - new Date(v.visitDate)) < 5 * 60 * 1000
+        );
+        if (hasCompletedSibling) return false;
+      }
+      return true;
     }).sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
   }, [dbVisits, dbPatients]);
   const [savedCases, setSavedCases] = useState([]);
@@ -1052,12 +1066,7 @@ export default function DbmsDashboard() {
 
       updatedCase.visits = allVisits.filter(v => v.visitId !== newVisitId);
 
-      // 4. Save new active visit to DB and update state
-      const newVisitData = JSON.parse(JSON.stringify(updatedCase));
-      delete newVisitData.visits;
-      newVisitData.chiefComplaints = newVisitData.complaints || [];
-      await putItem("visits", newVisitData);
-
+      // 4. Update UI state with new follow-up session (will save to DB when doctor edits and clicks Save Case)
       setCurrentCase(updatedCase);
 
       // 5. Update the savedCases list with enriched data for alerts
