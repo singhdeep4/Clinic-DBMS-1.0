@@ -590,12 +590,14 @@ export default function DbmsDashboard() {
             const { getPatientWithVisits } = await import("../lib/patientService.js");
             const fullRecord = await getPatientWithVisits(patient.patientId);
             if (fullRecord) {
-              const activeVisit = fullRecord.visits.find(v => v.status === "active") || fullRecord.visits[0] || {};
-              setCurrentCase({
+              const activeVisit = fullRecord.visits.find(v => v.status === "active");
+              setCurrentCase(mergeWithDefaults({
                 ...fullRecord.patient,
-                ...activeVisit,
-                visits: fullRecord.visits.filter(v => v.status !== "active")
-              });
+                ...(activeVisit || {}),
+                visits: activeVisit
+                  ? fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
+                  : fullRecord.visits
+              }));
               triggerNotification(`Loaded patient record for ${patient.name}.`);
             }
           }
@@ -1135,11 +1137,13 @@ export default function DbmsDashboard() {
       const { getPatientWithVisits } = await import("../lib/patientService.js");
       const fullRecord = await getPatientWithVisits(c.patientId);
       if (fullRecord) {
-        const activeVisit = fullRecord.visits.find(v => v.status === "active") || fullRecord.visits[0] || {};
+        const activeVisit = fullRecord.visits.find(v => v.status === "active");
         const combined = mergeWithDefaults({
           ...fullRecord.patient,
-          ...activeVisit,
-          visits: fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
+          ...(activeVisit || {}),
+          visits: activeVisit
+            ? fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
+            : fullRecord.visits
         });
         setCurrentCase(combined);
         addToRecentPatients(fullRecord.patient);
@@ -1172,11 +1176,13 @@ export default function DbmsDashboard() {
       const { getPatientWithVisits } = await import("../lib/patientService.js");
       const fullRecord = await getPatientWithVisits(patient.patientId);
       if (fullRecord) {
-        const activeVisit = fullRecord.visits.find(v => v.status === "active") || fullRecord.visits[0] || {};
+        const activeVisit = fullRecord.visits.find(v => v.status === "active");
         setCurrentCase(mergeWithDefaults({
           ...fullRecord.patient,
-          ...activeVisit,
-          visits: fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
+          ...(activeVisit || {}),
+          visits: activeVisit
+            ? fullRecord.visits.filter(v => v.visitId !== activeVisit.visitId)
+            : fullRecord.visits
         }));
         triggerNotification(`Loaded patient record for ${patient.name}.`);
       } else {
