@@ -1611,6 +1611,7 @@ export default function DbmsDashboard() {
     // Save state to Firestore
     await putItem("queue", { ...patient, status: "In-Consult" });
     
+    setViewMode("clinical");
     setActiveTab("profile");
     closeSidebarOnMobile();
     triggerNotification(`Consultation initialized for ${patient.name}`);
@@ -1627,15 +1628,11 @@ export default function DbmsDashboard() {
 
   const autoCheckoutQueuePatient = async (patientId, patientName, patientMobile, patientDOB) => {
     try {
-      const cleanMobileStr = (patientMobile || "").replace(/[^0-9]/g, "");
+      const cleanMobileStr = (patientMobile || "").replace(/[^0-9]/g, "").slice(-10);
       const matchingQueueItem = liveQueue.find(q => {
         if (q.patientId && q.patientId === patientId) return true;
-        const qMobile = (q.mobile || "").replace(/[^0-9]/g, "");
-        if (qMobile && qMobile === cleanMobileStr) {
-          const dob = q.dateOfBirth || q.dob;
-          if (dob && dob === patientDOB) return true;
-          if (q.name.toLowerCase().trim() === patientName.toLowerCase().trim()) return true;
-        }
+        const qMobile = (q.mobile || "").replace(/[^0-9]/g, "").slice(-10);
+        if (qMobile && cleanMobileStr && qMobile === cleanMobileStr) return true;
         if (q.name && q.name.toLowerCase().trim() === (patientName || "").toLowerCase().trim()) return true;
         return false;
       });
