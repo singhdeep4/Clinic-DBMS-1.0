@@ -1437,12 +1437,10 @@ export default function DbmsDashboard() {
     }
 
     try {
-      triggerNotification("Generating PDF prescription link, please wait...");
+      triggerNotification("Downloading PDF and opening WhatsApp...");
 
       const { default: html2canvas } = await import("html2canvas");
       const { jsPDF } = await import("jspdf");
-      const { getStorage, ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
-      const { default: app } = await import("../lib/firebase.js");
 
       const canvas = await html2canvas(element, {
         scale: 2,
@@ -1504,24 +1502,14 @@ export default function DbmsDashboard() {
         heightLeft -= pageHeight;
       }
 
-      // Convert PDF to Blob
-      const pdfBlob = pdf.output("blob");
-
-      // Upload to Firebase Storage
-      const storage = getStorage(app);
+      // Download PDF locally
       const patientNameClean = currentCase.name.trim().replace(/\s+/g, "_");
-      const filename = `Ayurkaya_Rx_${patientNameClean}_${Date.now()}.pdf`;
-      const storageRef = ref(storage, `prescriptions/${filename}`);
+      pdf.save(`Ayurkaya_Rx_${patientNameClean}.pdf`);
       
-      await uploadBytes(storageRef, pdfBlob);
-      const downloadUrl = await getDownloadURL(storageRef);
-
-      // Append PDF link to WhatsApp message
-      text += `\n\n*📄 PDF Prescription:* ${downloadUrl}`;
-      triggerNotification("PDF uploaded successfully! Redirecting to WhatsApp...");
+      triggerNotification("PDF downloaded! Please drag & drop the PDF into the WhatsApp chat.");
     } catch (err) {
-      console.error("PDF upload failed for WhatsApp, falling back to text only:", err);
-      triggerNotification("Could not create PDF link. Sending text only.");
+      console.error("PDF download failed for WhatsApp:", err);
+      triggerNotification("Could not download PDF. Redirecting to WhatsApp...");
     } finally {
       const encodedText = encodeURIComponent(text);
       const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodedText}`;
