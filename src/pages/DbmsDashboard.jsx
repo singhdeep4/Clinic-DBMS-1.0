@@ -273,7 +273,7 @@ export default function DbmsDashboard() {
       };
     });
 
-    // Filter out active follow-up drafts initialized at the same time as a completed visit
+    // Filter out active follow-up drafts and deduplicate exact same visit times for the same patient
     return visitsMapped.filter((v, idx, self) => {
       if (v.status === "active") {
         const hasCompletedSibling = self.some(other => 
@@ -283,6 +283,11 @@ export default function DbmsDashboard() {
         );
         if (hasCompletedSibling) return false;
       }
+      const firstIdx = self.findIndex(other => 
+        other.patientId === v.patientId && 
+        other.visitDate === v.visitDate
+      );
+      if (firstIdx !== idx) return false;
       return true;
     }).sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
   }, [dbVisits, dbPatients]);
@@ -975,7 +980,7 @@ export default function DbmsDashboard() {
 
       // 2. Save active visit to visits store
       const visitDate = updatedCase.visitDate || new Date().toISOString();
-      const visitId = updatedCase.visitId || `VIS-${patientId}-${Date.parse(visitDate)}`;
+      const visitId = updatedCase.visitId || generateVisitId();
       
       const visitData = {
         visitId,
@@ -1224,7 +1229,7 @@ export default function DbmsDashboard() {
             ...fullRecord.patient,
             visits: fullRecord.visits
           });
-          combined.visitId = `VIS-${c.patientId}-${Date.now()}`;
+          combined.visitId = generateVisitId();
           combined.visitDate = new Date().toISOString();
           combined.status = "active";
         }
@@ -1277,7 +1282,7 @@ export default function DbmsDashboard() {
           ...fullRecord.patient,
           visits: fullRecord.visits
         });
-        combined.visitId = `VIS-${patient.patientId}-${Date.now()}`;
+        combined.visitId = generateVisitId();
         combined.visitDate = new Date().toISOString();
         combined.status = "active";
         
@@ -3120,7 +3125,9 @@ export default function DbmsDashboard() {
                         </div>
                       ) : (
                         <div className="relative border-l-2 border-brand-light/70 ml-2.5 pl-6 space-y-6 py-2">
-                          {currentCase.visits.map((v, idx) => (
+                          {currentCase.visits
+                            .filter((v, idx, self) => self.findIndex(other => other.visitDate === v.visitDate) === idx)
+                            .map((v, idx) => (
                             <div key={v.visitId || idx} className="relative group">
                               {/* Timeline dot */}
                               <div className="absolute -left-[31px] top-1.5 h-3 w-3 rounded-full border-2 border-brand-primary bg-brand-beige group-hover:bg-brand-primary transition-colors" />
