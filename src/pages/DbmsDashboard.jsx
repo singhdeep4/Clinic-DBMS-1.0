@@ -73,15 +73,24 @@ const normalizeComplaints = (complaintsArray) => {
   });
 };
 
-// Merge loaded patient data with DEFAULT_STATE to fill any missing fields
-const mergeWithDefaults = (data) => ({
+const getFreshDefaultState = () => ({
   ...DEFAULT_STATE,
-  ...data,
-  pastHistory: { ...DEFAULT_STATE.pastHistory, ...(data.pastHistory || {}) },
-  drugHistory: { ...DEFAULT_STATE.drugHistory, ...(data.drugHistory || {}) },
-  familyHistory: { ...DEFAULT_STATE.familyHistory, ...(data.familyHistory || {}) },
-  complaints: normalizeComplaints(data.chiefComplaints || data.complaints),
+  complaints: [{ text: "", onsetDate: new Date().toISOString() }],
+  visitDate: new Date().toISOString(),
 });
+
+// Merge loaded patient data with a fresh default state to fill any missing fields
+const mergeWithDefaults = (data) => {
+  const fresh = getFreshDefaultState();
+  return {
+    ...fresh,
+    ...data,
+    pastHistory: { ...fresh.pastHistory, ...(data.pastHistory || {}) },
+    drugHistory: { ...fresh.drugHistory, ...(data.drugHistory || {}) },
+    familyHistory: { ...fresh.familyHistory, ...(data.familyHistory || {}) },
+    complaints: normalizeComplaints(data.chiefComplaints || data.complaints),
+  };
+};
 
 // Ayurvedic presets for rapid entry
 const MEDICINE_PRESETS = [
@@ -299,9 +308,9 @@ export default function DbmsDashboard() {
   const [currentCase, setCurrentCaseState] = useState(() => {
     try {
       const saved = sessionStorage.getItem("ayurkaya_current_case");
-      return saved ? JSON.parse(saved) : { ...DEFAULT_STATE };
+      return saved ? JSON.parse(saved) : getFreshDefaultState();
     } catch {
-      return { ...DEFAULT_STATE };
+      return getFreshDefaultState();
     }
   });
   const setCurrentCase = (val) => {
@@ -501,7 +510,7 @@ export default function DbmsDashboard() {
       combinedPatients.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
       setSavedCases(combinedPatients);
       if (patientIdsToPurge.includes(currentCase.patientId)) {
-        setCurrentCase({ ...DEFAULT_STATE });
+        setCurrentCase(getFreshDefaultState());
         setCompletedTabs({});
       }
     } catch (err) {
@@ -957,7 +966,7 @@ export default function DbmsDashboard() {
   };
 
   const handleNewPatientRegistration = () => {
-    setCurrentCase({ ...DEFAULT_STATE });
+    setCurrentCase(getFreshDefaultState());
     setCompletedTabs({});
     setActiveTab("profile");
     triggerNotification("Cleared workspace. Ready to register new patient.");
@@ -1323,12 +1332,13 @@ export default function DbmsDashboard() {
         const combined = mergeWithDefaults({
           ...fullRecord.patient,
           visits: fullRecord.visits,
-          surgicalHistory: latestVisit?.surgicalHistory || "",
-          drugAllergy: latestVisit?.drugAllergy || "",
-          anyOther: latestVisit?.anyOther || "",
-          pastHistory: latestVisit?.pastHistory || {},
-          drugHistory: latestVisit?.drugHistory || {},
-          familyHistory: latestVisit?.familyHistory || {},
+          surgicalHistory: fullRecord.patient?.surgicalHistory || latestVisit?.surgicalHistory || "",
+          drugAllergy: fullRecord.patient?.drugAllergy || latestVisit?.drugAllergy || "",
+          anyOther: fullRecord.patient?.anyOther || latestVisit?.anyOther || "",
+          pastHistory: fullRecord.patient?.pastHistory || latestVisit?.pastHistory || {},
+          drugHistory: fullRecord.patient?.drugHistory || latestVisit?.drugHistory || {},
+          familyHistory: fullRecord.patient?.familyHistory || latestVisit?.familyHistory || {},
+          addiction: fullRecord.patient?.addiction || latestVisit?.addiction || "None",
         });
         combined.visitId = generateVisitId();
         combined.visitDate = new Date().toISOString();
@@ -1360,7 +1370,7 @@ export default function DbmsDashboard() {
   const startNewFamilyMemberProfile = () => {
     const activeMobile = currentCase.mobile;
     setCurrentCase({
-      ...DEFAULT_STATE,
+      ...getFreshDefaultState(),
       mobile: activeMobile
     });
     setCompletedTabs({});
@@ -1370,7 +1380,7 @@ export default function DbmsDashboard() {
 
   // Clear case sheets for a new patient
   const startNewCase = () => {
-    setCurrentCase({ ...DEFAULT_STATE });
+    setCurrentCase(getFreshDefaultState());
     setCompletedTabs({});
     setViewMode("clinical");
     setActiveTab("profile");
