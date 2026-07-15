@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { 
   User, Plus, Trash2, History,
   Search, Printer, Save, RefreshCw, LogOut, Check, PlusCircle, ArrowLeft, ArrowRight,
-  Database, BarChart3, Bell, Shield, Download, Upload, AlertTriangle, Calendar, MessageCircle, Menu, X
+  Database, BarChart3, Bell, Shield, Download, Upload, AlertTriangle, Calendar, MessageCircle, Menu, X, Settings, ChevronDown
 } from "lucide-react";
 import SEO from "../components/SEO";
 import { 
@@ -251,6 +251,18 @@ export default function DbmsDashboard() {
   const setViewMode = (mode) => {
     sessionStorage.setItem("ayurkaya_view_mode", mode);
     setViewModeState(mode);
+  };
+
+  const [settingsExpanded, setSettingsExpanded] = useState(() => {
+    const currentMode = sessionStorage.getItem("ayurkaya_view_mode") || "clinical";
+    return currentMode === "settings";
+  });
+  const [settingsSubMode, setSettingsSubModeState] = useState(() => {
+    return sessionStorage.getItem("ayurkaya_settings_sub_mode") || "alerts";
+  });
+  const setSettingsSubMode = (subMode) => {
+    sessionStorage.setItem("ayurkaya_settings_sub_mode", subMode);
+    setSettingsSubModeState(subMode);
   };
   
   const [activeTab, setActiveTabState] = useState(() => {
@@ -652,9 +664,9 @@ export default function DbmsDashboard() {
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
-  // Load storage metrics and archives when viewMode switches to utilities
+  // Load storage metrics and archives when viewMode switches to settings and active setting tab needs metrics
   useEffect(() => {
-    if (viewMode === "utilities") {
+    if (viewMode === "settings" && (settingsSubMode === "metrics" || settingsSubMode === "plan" || settingsSubMode === "purge")) {
       async function loadMetrics() {
         try {
           const { getStorageMetrics } = await import("../lib/archiveService.js");
@@ -665,6 +677,12 @@ export default function DbmsDashboard() {
         }
       }
       loadMetrics();
+    }
+  }, [viewMode, settingsSubMode]);
+
+  useEffect(() => {
+    if (viewMode === "settings") {
+      setSettingsExpanded(true);
     }
   }, [viewMode]);
 
@@ -2969,33 +2987,143 @@ export default function DbmsDashboard() {
                 </span>
               )}
             </button>
-            <button
-              onClick={() => { setViewMode("followups"); closeSidebarOnMobile(); }}
-              className={`flex items-center gap-2.5 px-4.5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer relative ${
-                viewMode === "followups" 
-                  ? "bg-brand-primary text-brand-beige shadow-sm" 
-                  : "bg-brand-beige text-brand-primary hover:bg-brand-light/45"
-              }`}
-            >
-              <Bell size={15} />
-              <span>Alerts Hub</span>
-              {(alerts.length > 0 || followups.length > 0) && (
-                <span className="ml-auto bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold animate-pulse">
-                  {alerts.length + followups.length}
-                </span>
+            {/* Unified Settings Option */}
+            <div className="col-span-2 lg:col-span-1">
+              <button
+                onClick={() => {
+                  setSettingsExpanded(!settingsExpanded);
+                  if (viewMode !== "settings") {
+                    setViewMode("settings");
+                    if (!settingsSubMode) {
+                      setSettingsSubMode("alerts");
+                    }
+                  }
+                }}
+                className={`w-full flex items-center justify-between px-4.5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  viewMode === "settings"
+                    ? "bg-brand-primary text-brand-beige shadow-sm"
+                    : "bg-brand-beige text-brand-primary hover:bg-brand-light/45"
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Settings size={15} />
+                  <span>Settings</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {(alerts.length > 0 || followups.length > 0) && (
+                    <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold animate-pulse">
+                      {alerts.length + followups.length}
+                    </span>
+                  )}
+                  <ChevronDown
+                    size={14}
+                    className={`transition-transform duration-200 ${
+                      settingsExpanded ? "rotate-180" : ""
+                    }`}
+                  />
+                </div>
+              </button>
+              
+              {/* Settings Submenu Options */}
+              {settingsExpanded && (
+                <div className="mt-1 ml-4 pl-2.5 border-l border-brand-light/60 flex flex-col gap-1 animate-fadeIn">
+                  <button
+                    onClick={() => {
+                      setViewMode("settings");
+                      setSettingsSubMode("alerts");
+                      closeSidebarOnMobile();
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer text-left ${
+                      viewMode === "settings" && settingsSubMode === "alerts"
+                        ? "text-brand-accent bg-brand-primary/10"
+                        : "text-brand-secondary/80 hover:text-brand-primary hover:bg-brand-light/20"
+                    }`}
+                  >
+                    <span>Alert Hub</span>
+                    {(alerts.length > 0 || followups.length > 0) && (
+                      <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.25 rounded-full font-bold">
+                        {alerts.length + followups.length}
+                      </span>
+                    )}
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      setViewMode("settings");
+                      setSettingsSubMode("backup");
+                      closeSidebarOnMobile();
+                    }}
+                    className={`w-full flex items-center px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer text-left ${
+                      viewMode === "settings" && settingsSubMode === "backup"
+                        ? "text-brand-accent bg-brand-primary/10"
+                        : "text-brand-secondary/80 hover:text-brand-primary hover:bg-brand-light/20"
+                    }`}
+                  >
+                    System Backup
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setViewMode("settings");
+                      setSettingsSubMode("restore");
+                      closeSidebarOnMobile();
+                    }}
+                    className={`w-full flex items-center px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer text-left ${
+                      viewMode === "settings" && settingsSubMode === "restore"
+                        ? "text-brand-accent bg-brand-primary/10"
+                        : "text-brand-secondary/80 hover:text-brand-primary hover:bg-brand-light/20"
+                    }`}
+                  >
+                    Restore and Reset Tools
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setViewMode("settings");
+                      setSettingsSubMode("metrics");
+                      closeSidebarOnMobile();
+                    }}
+                    className={`w-full flex items-center px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer text-left ${
+                      viewMode === "settings" && settingsSubMode === "metrics"
+                        ? "text-brand-accent bg-brand-primary/10"
+                        : "text-brand-secondary/80 hover:text-brand-primary hover:bg-brand-light/20"
+                    }`}
+                  >
+                    Data Archiving and Storage Metrics
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setViewMode("settings");
+                      setSettingsSubMode("plan");
+                      closeSidebarOnMobile();
+                    }}
+                    className={`w-full flex items-center px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer text-left ${
+                      viewMode === "settings" && settingsSubMode === "plan"
+                        ? "text-brand-accent bg-brand-primary/10"
+                        : "text-brand-secondary/80 hover:text-brand-primary hover:bg-brand-light/20"
+                    }`}
+                  >
+                    Cloud Database Plan
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setViewMode("settings");
+                      setSettingsSubMode("purge");
+                      closeSidebarOnMobile();
+                    }}
+                    className={`w-full flex items-center px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer text-left ${
+                      viewMode === "settings" && settingsSubMode === "purge"
+                        ? "text-brand-accent bg-brand-primary/10"
+                        : "text-brand-secondary/80 hover:text-brand-primary hover:bg-brand-light/20"
+                    }`}
+                  >
+                    Inactive Patient Profile Purge
+                  </button>
+                </div>
               )}
-            </button>
-            <button
-              onClick={() => { setViewMode("utilities"); closeSidebarOnMobile(); }}
-              className={`flex items-center gap-2.5 px-4.5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                viewMode === "utilities" 
-                  ? "bg-brand-primary text-brand-beige shadow-sm" 
-                  : "bg-brand-beige text-brand-primary hover:bg-brand-light/45"
-              }`}
-            >
-              <Database size={15} />
-              <span>Settings and Backups</span>
-            </button>
+            </div>
           </div>
         </div>
         {/* Sidebar Case Sheets list (Only show when in clinical workspace) */}
@@ -3038,8 +3166,12 @@ export default function DbmsDashboard() {
               {viewMode === "clinical" && (currentCase.name ? `Clinical Record: ${currentCase.name}` : "New Consultation Case Sheet")}
               {viewMode === "walkins" && "Walk-ins & Search Directory"}
               {viewMode === "analytics" && "Clinic Analytics"}
-              {viewMode === "followups" && "Alerts and Follow-ups Hub"}
-              {viewMode === "utilities" && "System Settings and Backups"}
+              {viewMode === "settings" && settingsSubMode === "alerts" && "Alerts & Follow-ups Hub"}
+              {viewMode === "settings" && settingsSubMode === "backup" && "System Backup"}
+              {viewMode === "settings" && settingsSubMode === "restore" && "Restore & Reset Tools"}
+              {viewMode === "settings" && settingsSubMode === "metrics" && "Data Archiving & Metrics"}
+              {viewMode === "settings" && settingsSubMode === "plan" && "Cloud Database Plan"}
+              {viewMode === "settings" && settingsSubMode === "purge" && "Inactive Patient Profile Purge"}
               {viewMode === "recent_cases" && "All Recent Case Sheets"}
             </span>
           </div>
@@ -5071,7 +5203,7 @@ export default function DbmsDashboard() {
           )}
 
           {/* ==================== VIEW 3: ALERTS and FOLLOW-UPS ==================== */}
-          {viewMode === "followups" && (
+          {viewMode === "settings" && settingsSubMode === "alerts" && (
             <div className="space-y-8 animate-fadeIn">
               
               {/* Vitals and Lab Chemistry Alerts */}
@@ -5166,7 +5298,7 @@ export default function DbmsDashboard() {
                           href={`https://wa.me/91${f.mobile}?text=Hello%20${encodeURIComponent(f.name)}%2C%20this%20is%20Dr.%20Neha's%20clinic%20(Ayurkaya).%20We%20are%20reviewing%20your%20recent%20consultation%20record%20for%20${encodeURIComponent(f.reason)}.%20How%20is%20your%20progress%20with%20your%20treatments%3F%20Please%20let%20us%20know%20if%20you%20need%20to%20coordinate%20a%20follow-up%20review.`}
                           target="_blank"
                           rel="noreferrer"
-                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors inline-flex items-center gap-2 shadow-sm shrink-0 cursor-pointer self-stretch sm:self-center text-center justify-center"
+                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm shrink-0 cursor-pointer self-stretch sm:self-center text-center justify-center"
                         >
                           <MessageCircle size={14} /> Send WhatsApp Reminder
                         </a>
@@ -5179,45 +5311,58 @@ export default function DbmsDashboard() {
             </div>
           )}
 
-          {/* ==================== VIEW 4: DATABASE TOOLS ==================== */}
-          {viewMode === "utilities" && (
+          {/* ==================== VIEW 4: DATABASE TOOLS (MODULAR SETTINGS SUB-PAGES) ==================== */}
+          
+          {/* Subview: System Backup */}
+          {viewMode === "settings" && settingsSubMode === "backup" && (
             <div className="bg-brand-cream border border-brand-light/60 p-6 md:p-10 rounded-3xl space-y-8 shadow-sm animate-fadeIn">
-              
               <div className="border-b border-brand-light/45 pb-4 space-y-2">
                 <h3 className="font-serif text-2xl font-bold text-brand-primary flex items-center gap-2">
-                  <Database size={24} className="text-brand-secondary" />
-                  <span>System Backup, Restore and Reset Tools</span>
+                  <Download size={24} className="text-brand-secondary" />
+                  <span>System Backup</span>
                 </h3>
                 <p className="text-xs text-brand-dark/70 font-sans leading-relaxed">
-                  Your clinical records are now stored directly in Firestore. Backups are still recommended for offline recovery and export/import portability.
+                  Export database records to keep an offline backup copy for safe keeping and portability.
                 </p>
               </div>
 
-              {/* Utility grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                
-                {/* 1. Export */}
-                <div className="bg-brand-beige/20 border border-brand-light/45 p-6 rounded-2xl space-y-4 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <Download className="text-brand-primary" size={28} />
-                    <h4 className="font-serif font-bold text-base text-brand-primary">1. Backup Database</h4>
-                    <p className="text-xs text-brand-dark/65 leading-relaxed font-sans">
-                      Download all saved case sheets, registries, and waiting list patients as a single JSON file.
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleExportBackup}
-                    className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer mt-4"
-                  >
-                    Export JSON Backup
-                  </button>
+              <div className="max-w-md bg-brand-beige/20 border border-brand-light/45 p-6 rounded-2xl space-y-4 flex flex-col justify-between">
+                <div className="space-y-2">
+                  <Download className="text-brand-primary" size={28} />
+                  <h4 className="font-serif font-bold text-base text-brand-primary">Backup Database</h4>
+                  <p className="text-xs text-brand-dark/65 leading-relaxed font-sans">
+                    Download all saved case sheets, registries, and waiting list patients as a single JSON file.
+                  </p>
                 </div>
+                <button
+                  onClick={handleExportBackup}
+                  className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer mt-4"
+                >
+                  Export JSON Backup
+                </button>
+              </div>
+            </div>
+          )}
 
-                {/* 2. Restore Database */}
+          {/* Subview: Restore and Reset Tools */}
+          {viewMode === "settings" && settingsSubMode === "restore" && (
+            <div className="bg-brand-cream border border-brand-light/60 p-6 md:p-10 rounded-3xl space-y-8 shadow-sm animate-fadeIn">
+              <div className="border-b border-brand-light/45 pb-4 space-y-2">
+                <h3 className="font-serif text-2xl font-bold text-brand-primary flex items-center gap-2">
+                  <Database size={24} className="text-brand-secondary" />
+                  <span>Restore and Reset Tools</span>
+                </h3>
+                <p className="text-xs text-brand-dark/70 font-sans leading-relaxed">
+                  Utilities to restore your database from backup files, execute data cleanups, or perform system resets.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* 1. Restore Database */}
                 <div className="bg-brand-beige/20 border border-brand-light/45 p-6 rounded-2xl space-y-4 flex flex-col justify-between relative">
                   <div className="space-y-2">
                     <Upload className="text-brand-secondary" size={28} />
-                    <h4 className="font-serif font-bold text-base text-brand-primary">2. Restore Database</h4>
+                    <h4 className="font-serif font-bold text-base text-brand-primary">1. Restore Database</h4>
                     <p className="text-xs text-brand-dark/65 leading-relaxed font-sans">
                       Select a previously exported JSON backup file to override the database and restore files.
                     </p>
@@ -5239,11 +5384,11 @@ export default function DbmsDashboard() {
                   </div>
                 </div>
 
-                {/* 3. Storage Cleanup Optimizer */}
+                {/* 2. Historical Visit Purge */}
                 <div className="bg-brand-beige/20 border border-brand-light/45 p-6 rounded-2xl space-y-4 flex flex-col justify-between">
                   <div className="space-y-2">
                     <Trash2 className="text-emerald-600 animate-pulse" size={28} />
-                    <h4 className="font-serif font-bold text-base text-brand-primary">3. Historical Visit Purge</h4>
+                    <h4 className="font-serif font-bold text-base text-brand-primary">2. Historical Visit Purge</h4>
                     <p className="text-xs text-brand-dark/65 leading-relaxed font-sans">
                       Delete older consultations and timelines to save space. Strictly preserves each patient's basic profile details.
                     </p>
@@ -5270,11 +5415,11 @@ export default function DbmsDashboard() {
                   </button>
                 </div>
 
-                {/* 4. Clear */}
+                {/* 3. Reset Database */}
                 <div className="bg-brand-beige/20 border border-brand-light/45 p-6 rounded-2xl space-y-4 flex flex-col justify-between">
                   <div className="space-y-2">
                     <AlertTriangle className="text-red-500 animate-pulse" size={28} />
-                    <h4 className="font-serif font-bold text-base text-brand-primary">4. Reset Database</h4>
+                    <h4 className="font-serif font-bold text-base text-brand-primary">3. Reset Database</h4>
                     <p className="text-xs text-brand-dark/65 leading-relaxed font-sans">
                       Delete all patient data records and registries. Passcode verification required.
                     </p>
@@ -5286,250 +5431,289 @@ export default function DbmsDashboard() {
                     Clear Database Sheets
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
 
+          {/* Subview: Data Archiving and Storage Metrics */}
+          {viewMode === "settings" && settingsSubMode === "metrics" && (
+            <div className="bg-brand-cream border border-brand-light/60 p-6 md:p-10 rounded-3xl space-y-8 shadow-sm animate-fadeIn">
+              <div className="border-b border-brand-light/45 pb-4 space-y-1">
+                <h3 className="font-serif text-2xl font-bold text-brand-primary flex items-center gap-2">
+                  <Database size={20} className="text-brand-secondary" />
+                  <span>Data Archiving and Storage Metrics</span>
+                </h3>
+                <p className="text-xs text-brand-dark/70 font-sans">
+                  Keep database lightweight by moving old clinical records to archive storage. Restores are supported at any time.
+                </p>
               </div>
 
-              {/* Data Storage and Archiving Management Section */}
-              <div className="border-t border-brand-light/45 pt-8 space-y-6">
-                <div className="space-y-1">
-                  <h3 className="font-serif text-xl font-bold text-brand-primary flex items-center gap-2">
-                    <Database size={20} className="text-brand-secondary" />
-                    <span>Data Archiving and Storage Metrics</span>
-                  </h3>
-                  <p className="text-xs text-brand-dark/70 font-sans">
-                    Keep database lightweight by moving old clinical records to archive storage. Restores are supported at any time.
-                  </p>
-                </div>
-
-                {storageMetrics && (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
-                        <div className="text-2xl font-bold text-brand-primary font-mono">{storageMetrics.totalPatients}</div>
-                        <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Total Patients</div>
-                      </div>
-                      <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
-                        <div className="text-2xl font-bold text-emerald-700 font-mono">{storageMetrics.activeVisits}</div>
-                        <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Active Visits (&lt;6M)</div>
-                      </div>
-                      <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
-                        <div className="text-2xl font-bold text-amber-700 font-mono">{storageMetrics.warmVisits}</div>
-                        <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Older Visits (&gt;6M)</div>
-                      </div>
+              {storageMetrics ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
+                      <div className="text-2xl font-bold text-brand-primary font-mono">{storageMetrics.totalPatients}</div>
+                      <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Total Patients</div>
                     </div>
-
-                    {/* Real-time Storage Utilization Progress Meter */}
-                    <div className="flex flex-col md:flex-row md:items-start justify-between border-t border-brand-light/35 pt-6 gap-6">
-                      <div className="space-y-1.5 shrink-0">
-                        <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-widest">Cloud Database Plan</label>
-                        <select
-                          value={cloudPlan}
-                          onChange={(e) => handlePlanChange(e.target.value)}
-                          className="bg-brand-beige border border-brand-light px-3 py-2 rounded-xl text-xs font-semibold text-brand-secondary focus:outline-none cursor-pointer w-full md:w-auto"
-                        >
-                          <option value="spark">Spark Plan (1 GB Free Tier)</option>
-                          <option value="blaze">Blaze Plan (Pay-As-You-Go / Scalable)</option>
-                          <option value="custom">Custom Limit...</option>
-                        </select>
-                        {cloudPlan === "custom" && (
-                          <div className="flex items-center gap-2 mt-2 animate-fadeIn">
-                            <span className="text-[10px] font-bold text-brand-primary uppercase tracking-wider">Limit:</span>
-                            <input
-                              type="number"
-                              min="0.1"
-                              step="0.1"
-                              value={customLimitGB}
-                              onChange={(e) => handleCustomLimitChange(e.target.value)}
-                              className="w-20 bg-brand-beige border border-brand-light/70 px-2.5 py-1 rounded-lg text-xs font-mono focus:outline-none text-brand-secondary"
-                              placeholder="e.g. 5"
-                            />
-                            <span className="text-xs text-brand-dark/70 font-semibold">GB</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-grow max-w-lg space-y-2">
-                        {(() => {
-                          const bytes = storageMetrics.totalBytes || 0;
-                          const kb = bytes / 1024;
-                          const mb = kb / 1024;
-                          
-                          let limitMB = 1024; // Default Spark 1 GB
-                          if (cloudPlan === "custom") {
-                            limitMB = (parseFloat(customLimitGB) || 5) * 1024;
-                          }
-                          const percentage = Math.min((mb / limitMB) * 100, 100);
-                          
-                          return (
-                            <div className="space-y-1.5">
-                              <div className="flex justify-between text-xs font-semibold text-brand-dark/80">
-                                <span>Storage Utilized:</span>
-                                <span className="font-mono text-xs">
-                                  {mb < 0.1 ? `${kb.toFixed(2)} KB` : `${mb.toFixed(2)} MB`}
-                                  {cloudPlan === "spark" ? ` / ${limitMB} MB (${percentage.toFixed(4)}%)` : ""}
-                                  {cloudPlan === "custom" ? ` / ${(limitMB / 1024).toFixed(1)} GB (${percentage.toFixed(4)}%)` : ""}
-                                  {cloudPlan === "blaze" ? " (Unlimited Capacity)" : ""}
-                                </span>
-                              </div>
-                              
-                              {cloudPlan === "spark" || cloudPlan === "custom" ? (
-                                <div className="w-full h-3 bg-brand-beige rounded-full overflow-hidden border border-brand-light/50 relative">
-                                  <div 
-                                    className="h-full bg-brand-secondary transition-all duration-700 rounded-full" 
-                                    style={{ width: `${Math.max(percentage, 1.5)}%` }}
-                                  />
-                                </div>
-                              ) : (
-                                <div className="w-full h-4.5 bg-brand-beige rounded-full overflow-hidden border border-brand-light/50 relative flex items-center justify-center">
-                                  <div 
-                                    className="h-full bg-emerald-600 transition-all duration-700 rounded-full w-full opacity-20" 
-                                  />
-                                  <span className="absolute text-[8px] text-emerald-950 font-bold uppercase tracking-widest select-none">Auto-scaling Active (Infinite)</span>
-                                </div>
-                              )}
-                              
-                              <p className="text-[10px] text-brand-dark/50 italic leading-snug">
-                                {cloudPlan === "spark" && "On Spark plan, Firestore enforces a strict 1 GB limit. Use cleanup sweeper tools below to keep utilization low."}
-                                {cloudPlan === "blaze" && "On Blaze plan, Firestore has no storage limit and auto-scales dynamically. The first 1 GB remains completely free."}
-                                {cloudPlan === "custom" && `Custom limit set to ${(limitMB / 1024).toFixed(1)} GB. Progress bar tracks usage relative to your specified capacity threshold.`}
-                              </p>
-                            </div>
-                          );
-                        })()}
-                      </div>
+                    <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
+                      <div className="text-2xl font-bold text-emerald-700 font-mono">{storageMetrics.activeVisits}</div>
+                      <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Active Visits (&lt;6M)</div>
+                    </div>
+                    <div className="bg-brand-beige/10 border border-brand-light/35 p-4 rounded-2xl text-center">
+                      <div className="text-2xl font-bold text-amber-700 font-mono">{storageMetrics.warmVisits}</div>
+                      <div className="text-[10px] text-brand-dark/65 font-bold uppercase tracking-wider mt-1">Older Visits (&gt;6M)</div>
                     </div>
                   </div>
-                )}
-
-
-                {/* Inactive Patient Purge Panel */}
-                <div className="bg-white border border-brand-light/35 rounded-2xl overflow-hidden shadow-sm space-y-4 p-5">
-                  <div className="flex justify-between items-center flex-wrap gap-3 pb-3 border-b border-brand-light/35">
-                    <div className="space-y-1">
-                      <span className="font-serif font-bold text-xs text-brand-primary uppercase tracking-wider block">Inactive Patient Profile Purge</span>
-                      <span className="text-[10px] text-brand-dark/60 font-sans">Delete inactive patients completely (demographics and visits) to free up storage.</span>
+                  
+                  <div className="bg-white border border-brand-light/35 rounded-2xl p-6">
+                    <h4 className="font-serif font-bold text-sm text-brand-primary mb-2">Storage Size Breakdown</h4>
+                    <div className="text-xs text-brand-dark/70 space-y-2">
+                      <p>Total Data Size: <span className="font-mono font-bold">{(storageMetrics.totalBytes / (1024 * 1024)).toFixed(4)} MB</span></p>
+                      <p>Active and archived visits are monitored automatically. If storage space is critical, utilize cleanup/purge tools.</p>
                     </div>
-                    
-                    <div className="flex items-center gap-3">
-                      <select
-                        value={inactiveFilter}
-                        onChange={(e) => {
-                          setInactiveFilter(e.target.value);
-                          setSelectedInactiveIds([]);
-                        }}
-                        className="bg-brand-beige border border-brand-light px-2.5 py-1.5 rounded-lg text-xs font-semibold text-brand-secondary focus:outline-none cursor-pointer"
-                      >
-                        <option value="6m">Inactive for +6 Months</option>
-                        <option value="9m">Inactive for +9 Months</option>
-                        <option value="1y">Inactive for +1 Year</option>
-                        <option value="2y">Inactive for +2 Years</option>
-                      </select>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-xs text-brand-dark/55 italic">
+                  Loading database storage metrics...
+                </div>
+              )}
+            </div>
+          )}
 
-                      {selectedInactiveIds.length > 0 && (
-                        <button
-                          onClick={() => deleteInactivePatients(selectedInactiveIds)}
-                          className="bg-red-700 text-brand-beige hover:bg-red-800 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer flex items-center gap-1.5"
-                        >
-                          <Trash2 size={13} /> Delete Selected ({selectedInactiveIds.length})
-                        </button>
+          {/* Subview: Cloud Database Plan */}
+          {viewMode === "settings" && settingsSubMode === "plan" && (
+            <div className="bg-brand-cream border border-brand-light/60 p-6 md:p-10 rounded-3xl space-y-8 shadow-sm animate-fadeIn">
+              <div className="border-b border-brand-light/45 pb-4 space-y-2">
+                <h3 className="font-serif text-2xl font-bold text-brand-primary flex items-center gap-2">
+                  <Database size={24} className="text-brand-secondary" />
+                  <span>Cloud Database Plan</span>
+                </h3>
+                <p className="text-xs text-brand-dark/70 font-sans leading-relaxed">
+                  Monitor your database plan limits and customize safety usage thresholds.
+                </p>
+              </div>
+
+              {storageMetrics && (
+                <div className="bg-white border border-brand-light/35 rounded-2xl p-6 space-y-6">
+                  <div className="space-y-1.5 max-w-md">
+                    <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-widest">Cloud Database Plan</label>
+                    <select
+                      value={cloudPlan}
+                      onChange={(e) => handlePlanChange(e.target.value)}
+                      className="bg-brand-beige border border-brand-light px-3 py-2 rounded-xl text-xs font-semibold text-brand-secondary focus:outline-none cursor-pointer w-full"
+                    >
+                      <option value="spark">Spark Plan (1 GB Free Tier)</option>
+                      <option value="blaze">Blaze Plan (Pay-As-You-Go / Scalable)</option>
+                      <option value="custom">Custom Limit...</option>
+                    </select>
+                    {cloudPlan === "custom" && (
+                      <div className="flex items-center gap-2 mt-2 animate-fadeIn">
+                        <span className="text-[10px] font-bold text-brand-primary uppercase tracking-wider">Limit:</span>
+                        <input
+                          type="number"
+                          min="0.1"
+                          step="0.1"
+                          value={customLimitGB}
+                          onChange={(e) => handleCustomLimitChange(e.target.value)}
+                          className="w-20 bg-brand-beige border border-brand-light/70 px-2.5 py-1 rounded-lg text-xs font-mono focus:outline-none text-brand-secondary"
+                          placeholder="e.g. 5"
+                        />
+                        <span className="text-xs text-brand-dark/70 font-semibold">GB</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {(() => {
+                      const bytes = storageMetrics.totalBytes || 0;
+                      const kb = bytes / 1024;
+                      const mb = kb / 1024;
+                      
+                      let limitMB = 1024;
+                      if (cloudPlan === "custom") {
+                        limitMB = (parseFloat(customLimitGB) || 5) * 1024;
+                      }
+                      const percentage = Math.min((mb / limitMB) * 100, 100);
+                      
+                      return (
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between text-xs font-semibold text-brand-dark/80">
+                            <span>Storage Utilized:</span>
+                            <span className="font-mono text-xs">
+                              {mb < 0.1 ? `${kb.toFixed(2)} KB` : `${mb.toFixed(2)} MB`}
+                              {cloudPlan === "spark" ? ` / ${limitMB} MB (${percentage.toFixed(4)}%)` : ""}
+                              {cloudPlan === "custom" ? ` / ${(limitMB / 1024).toFixed(1)} GB (${percentage.toFixed(4)}%)` : ""}
+                              {cloudPlan === "blaze" ? " (Unlimited Capacity)" : ""}
+                            </span>
+                          </div>
+                          
+                          {cloudPlan === "spark" || cloudPlan === "custom" ? (
+                            <div className="w-full h-3 bg-brand-beige rounded-full overflow-hidden border border-brand-light/50 relative">
+                              <div 
+                                className="h-full bg-brand-secondary transition-all duration-700 rounded-full" 
+                                style={{ width: `${Math.max(percentage, 1.5)}%` }}
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-full h-4.5 bg-brand-beige rounded-full overflow-hidden border border-brand-light/50 relative flex items-center justify-center">
+                              <div 
+                                className="h-full bg-emerald-600 transition-all duration-700 rounded-full w-full opacity-20" 
+                              />
+                              <span className="absolute text-[8px] text-emerald-950 font-bold uppercase tracking-widest select-none">Auto-scaling Active (Infinite)</span>
+                            </div>
+                          )}
+                          
+                          <p className="text-[10px] text-brand-dark/50 italic leading-snug">
+                            {cloudPlan === "spark" && "On Spark plan, Firestore enforces a strict 1 GB limit. Use cleanup sweeper tools to keep utilization low."}
+                            {cloudPlan === "blaze" && "On Blaze plan, Firestore has no storage limit and auto-scales dynamically. The first 1 GB remains completely free."}
+                            {cloudPlan === "custom" && `Custom limit set to ${(limitMB / 1024).toFixed(1)} GB. Progress bar tracks usage relative to your specified capacity threshold.`}
+                          </p>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Subview: Inactive Patient Profile Purge */}
+          {viewMode === "settings" && settingsSubMode === "purge" && (
+            <div className="bg-brand-cream border border-brand-light/60 p-6 md:p-10 rounded-3xl space-y-8 shadow-sm animate-fadeIn">
+              <div className="border-b border-brand-light/45 pb-4 space-y-2">
+                <h3 className="font-serif text-2xl font-bold text-brand-primary flex items-center gap-2">
+                  <Database size={24} className="text-brand-secondary" />
+                  <span>Inactive Patient Profile Purge</span>
+                </h3>
+                <p className="text-xs text-brand-dark/70 font-sans leading-relaxed">
+                  Identify and delete inactive patients completely (both basic demographics and visit histories) to free up storage space.
+                </p>
+              </div>
+
+              <div className="bg-white border border-brand-light/35 rounded-2xl overflow-hidden shadow-sm space-y-4 p-5">
+                <div className="flex justify-between items-center flex-wrap gap-3 pb-3 border-b border-brand-light/35">
+                  <div className="space-y-1">
+                    <span className="font-serif font-bold text-xs text-brand-primary uppercase tracking-wider block">Inactive Patient Profiles</span>
+                    <span className="text-[10px] text-brand-dark/60 font-sans">Tick profiles to run batch deletions.</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={inactiveFilter}
+                      onChange={(e) => {
+                        setInactiveFilter(e.target.value);
+                        setSelectedInactiveIds([]);
+                      }}
+                      className="bg-brand-beige border border-brand-light px-2.5 py-1.5 rounded-lg text-xs font-semibold text-brand-secondary focus:outline-none cursor-pointer"
+                    >
+                      <option value="6m">Inactive for +6 Months</option>
+                      <option value="9m">Inactive for +9 Months</option>
+                      <option value="1y">Inactive for +1 Year</option>
+                      <option value="2y">Inactive for +2 Years</option>
+                    </select>
+
+                    {selectedInactiveIds.length > 0 && (
+                      <button
+                        onClick={() => deleteInactivePatients(selectedInactiveIds)}
+                        className="bg-red-700 text-brand-beige hover:bg-red-800 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Trash2 size={13} /> Delete Selected ({selectedInactiveIds.length})
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {(() => {
+                  const inactiveList = getInactivePatients();
+                  return (
+                    <div className="divide-y divide-brand-light/25 max-h-[350px] overflow-y-auto">
+                      {inactiveList.length === 0 ? (
+                        <div className="p-8 text-center text-xs text-brand-dark/55 italic font-sans">
+                          No inactive patients found matching this threshold.
+                        </div>
+                      ) : (
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="text-brand-primary border-b border-brand-light/35 select-none bg-brand-light/5 text-[10px] font-bold uppercase tracking-wider">
+                              <th className="p-2 w-8 text-center">
+                                <input
+                                  type="checkbox"
+                                  className="cursor-pointer"
+                                  checked={selectedInactiveIds.length === inactiveList.length && inactiveList.length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedInactiveIds(inactiveList.map(item => item.patientId));
+                                    } else {
+                                      setSelectedInactiveIds([]);
+                                    }
+                                  }}
+                                />
+                              </th>
+                              <th className="p-2">Patient ID</th>
+                              <th className="p-2">Name</th>
+                              <th className="p-2">Mobile</th>
+                              <th className="p-2">Last Visit Date</th>
+                              <th className="p-2 text-center w-16">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {inactiveList.map((item, index) => {
+                              const lastVisitDateStr = item.visitDate 
+                                ? new Date(item.visitDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                                : "No visit recorded";
+                              return (
+                                <tr key={item.patientId || index} className="border-b border-brand-light/15 hover:bg-brand-beige/10">
+                                  <td className="p-2 text-center">
+                                    <input
+                                      type="checkbox"
+                                      className="cursor-pointer"
+                                      checked={selectedInactiveIds.includes(item.patientId)}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedInactiveIds(prev => [...prev, item.patientId]);
+                                        } else {
+                                          setSelectedInactiveIds(prev => prev.filter(id => id !== item.patientId));
+                                        }
+                                      }}
+                                    />
+                                  </td>
+                                  <td className="p-2 font-mono text-[10px] font-bold text-brand-secondary">{item.patientId}</td>
+                                  <td className="p-2 font-serif font-bold text-brand-primary">{item.name}</td>
+                                  <td className="p-2 text-brand-dark/75">{item.mobile || "N/A"}</td>
+                                  <td className="p-2">
+                                    <div className="font-semibold text-brand-dark/85">{lastVisitDateStr}</div>
+                                    <div className="text-[10px] text-brand-dark/50 italic">{item.visitDate ? getDurationString(item.visitDate) : ""}</div>
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    <button
+                                      onClick={() => deleteInactivePatients([item.patientId])}
+                                      className="text-red-700 hover:text-red-800 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                      title="Delete Patient Profile & All Visits"
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       )}
                     </div>
-                  </div>
-
-                  {(() => {
-                    const inactiveList = getInactivePatients();
-                    return (
-                      <div className="divide-y divide-brand-light/25 max-h-[350px] overflow-y-auto">
-                        {inactiveList.length === 0 ? (
-                          <div className="p-8 text-center text-xs text-brand-dark/50 font-sans">
-                            No inactive patients found matching this threshold.
-                          </div>
-                        ) : (
-                          <table className="w-full text-left text-xs border-collapse">
-                            <thead>
-                              <tr className="text-brand-primary border-b border-brand-light/35 select-none bg-brand-light/5 text-[10px] font-bold uppercase tracking-wider">
-                                <th className="p-2 w-8 text-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedInactiveIds.length === inactiveList.length}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setSelectedInactiveIds(inactiveList.map(p => p.patientId));
-                                      } else {
-                                        setSelectedInactiveIds([]);
-                                      }
-                                    }}
-                                    className="cursor-pointer rounded border-brand-light"
-                                  />
-                                </th>
-                                <th className="p-2">Patient Details</th>
-                                <th className="p-2">Last Visit</th>
-                                <th className="p-2 w-20 text-center">Action</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-brand-light/20">
-                              {inactiveList.map((item) => {
-                                const isChecked = selectedInactiveIds.includes(item.patientId);
-                                const lastVisitDateStr = item.visitDate ? new Date(item.visitDate).toLocaleDateString("en-IN", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric"
-                                }) : "Never";
-                                
-                                return (
-                                  <tr key={item.patientId} className="hover:bg-brand-cream/35 transition-colors">
-                                    <td className="p-2 text-center">
-                                      <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        onChange={(e) => {
-                                          if (e.target.checked) {
-                                            setSelectedInactiveIds(prev => [...prev, item.patientId]);
-                                          } else {
-                                            setSelectedInactiveIds(prev => prev.filter(id => id !== item.patientId));
-                                          }
-                                        }}
-                                        className="cursor-pointer rounded border-brand-light"
-                                      />
-                                    </td>
-                                    <td className="p-2 py-3">
-                                      <div className="font-bold text-brand-primary">{item.name}</div>
-                                      <div className="text-[10px] text-brand-dark/65 font-mono">{item.patientId} • {item.mobile || "No Mobile"}</div>
-                                    </td>
-                                    <td className="p-2">
-                                      <div className="font-semibold text-brand-dark/85">{lastVisitDateStr}</div>
-                                      <div className="text-[10px] text-brand-dark/50 italic">{item.visitDate ? getDurationString(item.visitDate) : ""}</div>
-                                    </td>
-                                    <td className="p-2 text-center">
-                                      <button
-                                        onClick={() => deleteInactivePatients([item.patientId])}
-                                        className="text-red-700 hover:text-red-800 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-                                        title="Delete Patient Profile & All Visits"
-                                      >
-                                        <Trash2 size={15} />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
+                  );
+                })()}
               </div>
 
               {/* Status Info box */}
               <div className="bg-brand-beige/40 border border-brand-light/45 p-4.5 rounded-2xl flex items-start space-x-3 text-xs text-brand-dark/85 leading-relaxed">
                 <Shield className="text-brand-secondary shrink-0 mt-0.5" size={16} />
                 <div>
-                    <strong>Security and Privacy Notice:</strong> All clinical records are saved directly to Firestore. Data is stored remotely in your configured Firebase project; export backups remain recommended for offline recovery.
-            </div>
+                  <strong>Security and Privacy Notice:</strong> All deletion operations are permanent. Deleting an inactive patient profile will clean both the patient profile and all corresponding consultation record histories permanently.
+                </div>
               </div>
             </div>
           )}
-
           {/* ==================== VIEW 6: ALL RECENT CASES ==================== */}
           {viewMode === "recent_cases" && (() => {
             // Derive unique year options from visit dates
