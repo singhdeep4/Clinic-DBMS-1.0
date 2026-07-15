@@ -142,3 +142,42 @@ export async function linkPatientToUid(patientId, uid, email) {
     return false;
   }
 }
+
+// Verify if an email is an authorized doctor
+export async function isDoctorAuthorized(email) {
+  if (!email) return false;
+  try {
+    const { collection, getDocs, query, where } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+
+    const q = query(collection(fdb, "doctors"), where("email", "==", email.toLowerCase().trim()));
+    const snapshot = await getDocs(q);
+    return !snapshot.empty;
+  } catch (err) {
+    console.error("Error checking doctor authorization:", err);
+    return false;
+  }
+}
+
+// Seed doctor accounts into Firestore if none exist
+export async function seedDoctorsIfEmpty() {
+  try {
+    const { collection, getDocs, doc, setDoc } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+
+    const snapshot = await getDocs(collection(fdb, "doctors"));
+    if (snapshot.empty) {
+      const defaults = ["drneha@ayurkaya.com", "deep2006deep@gmail.com"];
+      for (const email of defaults) {
+        await setDoc(doc(fdb, "doctors", email), {
+          email: email.toLowerCase().trim(),
+          role: "doctor",
+          createdAt: new Date().toISOString()
+        });
+      }
+      console.log("Seeded default doctor accounts in Firestore.");
+    }
+  } catch (err) {
+    console.error("Error seeding doctors:", err);
+  }
+}

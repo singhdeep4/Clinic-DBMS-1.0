@@ -26,6 +26,16 @@ export default function Login() {
 
   // Seed Doctor Account if not present
   useEffect(() => {
+    const seed = async () => {
+      try {
+        const { seedDoctorsIfEmpty } = await import("../lib/patientService.js");
+        await seedDoctorsIfEmpty();
+      } catch (err) {
+        console.error("Failed to seed doctors list:", err);
+      }
+    };
+    seed();
+
     const docAccount = localStorage.getItem("ayurkaya_doctor_account");
     if (!docAccount) {
       localStorage.setItem(
@@ -79,8 +89,9 @@ export default function Login() {
       const user = userCredential.user;
 
       if (role === "doctor") {
-        const allowedDoctors = ["drneha@ayurkaya.com", "deep2006deep@gmail.com"];
-        if (!allowedDoctors.includes(email.toLowerCase())) {
+        const { isDoctorAuthorized } = await import("../lib/patientService.js");
+        const authorized = await isDoctorAuthorized(email);
+        if (!authorized) {
           setErrorMsg("Access Denied: This account is not authorized as a doctor.");
           await auth.signOut();
           return;
