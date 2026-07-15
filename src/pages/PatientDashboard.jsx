@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../lib/firebase";
-import { getPatientByUid, getPatientWithVisits } from "../lib/patientService";
+import { getPatientsByUid, getPatientWithVisits, linkFamilyMemberToUid } from "../lib/patientService";
 import { 
   User, Calendar, Shield, LogOut, FileText, ClipboardList, CheckCircle, 
-  AlertCircle, Activity, Heart, Clock, Printer, MapPin, Phone
+  AlertCircle, Activity, Heart, Clock, Printer, MapPin, Phone, UserPlus, X, ChevronDown
 } from "lucide-react";
 import SEO from "../components/SEO";
 
 export default function PatientDashboard() {
   const navigate = useNavigate();
+  const [patientsList, setPatientsList] = useState([]);
   const [patient, setPatient] = useState(null);
   const [visits, setVisits] = useState([]);
   const [selectedVisit, setSelectedVisit] = useState(null);
@@ -18,16 +19,68 @@ export default function PatientDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Add Family Member Modal States
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [modalName, setModalName] = useState("");
+  const [modalMobile, setModalMobile] = useState("");
+  const [modalDob, setModalDob] = useState("");
+  const [modalGender, setModalGender] = useState("Male");
+  const [modalRelation, setModalRelation] = useState("Child"); // "Spouse" | "Child" | "Parent" | "Other"
+  const [modalError, setModalError] = useState("");
+  const [modalSuccess, setModalSuccess] = useState("");
+  const [modalSubmitting, setModalSubmitting] = useState(false);
+
+  const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
+
+  const loadAllLinkedPatients = async (uid, selectId = null) => {
+    try {
+      const list = await getPatientsByUid(uid);
+      setPatientsList(list);
+      
+      if (list.length > 0) {
+        let active = list[0];
+        if (selectId) {
+          const found = list.find(p => p.patientId === selectId);
+          if (found) active = found;
+        }
+        setPatient(active);
+        await loadPatientVisits(active.patientId);
+      } else {
+        setError("Could not find any patient profiles linked to this account.");
+      }
+    } catch (err) {
+      console.error("Error loading linked profiles:", err);
+      setError("Failed to load your patient profile.");
+    }
+  };
+
+  const loadPatientVisits = async (patientId) => {
+    try {
+      const record = await getPatientWithVisits(patientId);
+      if (record && record.visits) {
+        setVisits(record.visits);
+        if (record.visits.length > 0) {
+          setSelectedVisit(record.visits[0]);
+        } else {
+          setSelectedVisit(null);
+        }
+      } else {
+        setVisits([]);
+        setSelectedVisit(null);
+      }
+    } catch (err) {
+      console.error("Error loading patient visits:", err);
+    }
+  };
+
   useEffect(() => {
     const checkAuthAndLoad = async () => {
-      // Check auth from local storage first for fast response
       const isLoggedIn = localStorage.getItem("ayurkaya_patient_logged_in") === "true";
       if (!isLoggedIn) {
         navigate("/login");
         return;
       }
 
-      // Wait for Firebase Auth state to resolve
       auth.onAuthStateChanged(async (user) => {
         if (!user) {
           localStorage.removeItem("ayurkaya_patient_logged_in");
@@ -37,25 +90,10 @@ export default function PatientDashboard() {
         }
 
         try {
-          const patientData = await getPatientByUid(user.uid);
-          if (!patientData) {
-            setError("Could not find a patient profile linked to this account.");
-            setLoading(false);
-            return;
-          }
-
-          setPatient(patientData);
-
-          const record = await getPatientWithVisits(patientData.patientId);
-          if (record && record.visits) {
-            setVisits(record.visits);
-            if (record.visits.length > 0) {
-              setSelectedVisit(record.visits[0]);
-            }
-          }
+          await loadAllLinkedPatients(user.uid);
         } catch (err) {
-          console.error("Error loading patient records:", err);
-          setError("Failed to load your patient history.");
+          console.error("Initial load error:", err);
+          setError("Failed to load records.");
         } finally {
           setLoading(false);
         }
@@ -64,6 +102,14 @@ export default function PatientDashboard() {
 
     checkAuthAndLoad();
   }, [navigate]);
+
+  const handleProfileSwitch = async (p) => {
+    setPatient(p);
+    setIsSwitcherOpen(false);
+    setLoading(true);
+    await loadPatientVisits(p.patientId);
+    setLoading(false);
+  };
 
   const handleLogout = async () => {
     try {
@@ -76,7 +122,102 @@ export default function PatientDashboard() {
     }
   };
 
-  const handlePrintVisit = async (visit) => {
+  const calculateAge = (dobString) => {
+    if (!dobString) return "";
+    const birthDate = new Date(dobString);
+    if (isNaN(birthDate.getTime())) return "";
+    const today = new Date();
+    let calculatedAge = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      calculatedAge--;
+    }
+    return calculatedAge >= 0 ? calculatedAge.toString() : "";
+  };
+
+  const handleAddFamilyMember = async (e) => {
+    e.preventDefault();
+    setModalError("");
+    setModalSuccess("");
+    setModalSubmitting(true);
+
+    if (!modalName || !modalMobile || !modalDob) {
+      setModalError("Please fill in all fields.");
+      setModalSubmitting(false);
+      return;
+    }
+
+    const cleanMobile = modalMobile.replace(/[^0-9]/g, "");
+    if (cleanMobile.length !== 10) {
+      setModalError("Please enter a valid 10-digit mobile number.");
+      setModalSubmitting(false);
+      return;
+    }
+
+    try {
+      const { findDuplicatePatient, getNextPatientId } = await import("../lib/patientService.js");
+      const { putItem } = await import("../lib/db.js");
+
+      // 1. Check if they already exist in database (e.g. registered at clinic previously)
+      const existing = await findDuplicatePatient(cleanMobile, modalDob);
+      const user = auth.currentUser;
+
+      if (!user) {
+        setModalError("Session expired. Please sign in again.");
+        setModalSubmitting(false);
+        return;
+      }
+
+      let selectedId = null;
+
+      if (existing) {
+        // Link them
+        await linkFamilyMemberToUid(existing.patientId, user.uid, modalRelation);
+        setModalSuccess(`Successfully linked ${modalName}'s existing records to your family account!`);
+        selectedId = existing.patientId;
+      } else {
+        // Create new patient record
+        const nextId = await getNextPatientId();
+        const newPatient = {
+          patientId: nextId,
+          name: modalName,
+          mobile: cleanMobile,
+          dateOfBirth: modalDob,
+          gender: modalGender,
+          age: calculateAge(modalDob) || "N/A",
+          uid: user.uid,
+          relation: modalRelation,
+          createdAt: new Date().toISOString()
+        };
+        await putItem("patients", newPatient);
+        setModalSuccess(`Successfully registered and added ${modalName} to your family profiles!`);
+        selectedId = nextId;
+      }
+
+      // Reset form
+      setModalName("");
+      setModalMobile("");
+      setModalDob("");
+      setModalGender("Male");
+      setModalRelation("Child");
+
+      // Refresh patients list and activate the new member
+      await loadAllLinkedPatients(user.uid, selectedId);
+
+      setTimeout(() => {
+        setShowAddModal(false);
+        setModalSuccess("");
+      }, 2000);
+
+    } catch (err) {
+      console.error("Add family member error:", err);
+      setModalError("Failed to add family member.");
+    } finally {
+      setModalSubmitting(false);
+    }
+  };
+
+  const handlePrintVisit = (visit) => {
     if (!visit) return;
     window.print();
   };
@@ -113,34 +254,75 @@ export default function PatientDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-brand-beige flex flex-col font-sans">
+    <div className="min-h-screen bg-brand-beige flex flex-col font-sans relative">
       <SEO title="My Health Portal" description="Access your patient visit history, prescriptions, and lab results." />
 
       {/* Header Profile Section */}
-      <div className="bg-gradient-to-br from-brand-primary via-brand-secondary to-brand-primary/95 text-brand-beige py-6 shadow-sm shrink-0">
+      <div className="bg-gradient-to-br from-brand-primary via-brand-secondary to-brand-primary/95 text-brand-beige py-6 shadow-sm shrink-0 print:bg-white print:text-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          
+          {/* Profile Details & Switcher */}
           <div className="flex items-center gap-4">
             <div className="h-14 w-14 rounded-full bg-brand-beige/10 border border-brand-beige/20 flex items-center justify-center text-2xl font-bold text-brand-beige shrink-0 font-serif">
               {(patient?.name || "?")[0].toUpperCase()}
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 relative">
                 <h1 className="font-serif text-2xl font-bold">{patient?.name}</h1>
-                <span className="text-[10px] font-mono font-bold bg-white/15 px-2 py-0.5 rounded shrink-0">
-                  {patient?.patientId}
-                </span>
+                
+                {/* Family Profile Switcher Dropdown */}
+                {patientsList.length > 1 && (
+                  <div className="relative print:hidden">
+                    <button
+                      onClick={() => setIsSwitcherOpen(!isSwitcherOpen)}
+                      className="flex items-center gap-1 bg-white/15 hover:bg-white/25 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
+                    >
+                      <span>Switch Profile</span>
+                      <ChevronDown size={12} />
+                    </button>
+                    {isSwitcherOpen && (
+                      <div className="absolute left-0 mt-1.5 w-48 bg-brand-cream border border-brand-light/75 text-brand-primary rounded-xl shadow-xl py-1.5 z-50">
+                        {patientsList.map((p) => (
+                          <button
+                            key={p.patientId}
+                            onClick={() => handleProfileSwitch(p)}
+                            className={`w-full text-left px-4 py-2 text-xs font-semibold hover:bg-brand-light transition-colors flex justify-between items-center ${
+                              p.patientId === patient?.patientId ? "bg-brand-light/35 font-bold" : ""
+                            }`}
+                          >
+                            <span>{p.name}</span>
+                            <span className="text-[9px] opacity-70 bg-brand-primary/10 px-1.5 py-0.5 rounded">
+                              {p.relation || "Self"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <p className="text-xs text-brand-light/80 mt-1 font-medium">
+                {patient?.relation ? `${patient.relation} • ` : "Primary Profile • "} 
                 {patient?.gender} • {patient?.age} Yrs • DOB: {patient?.dateOfBirth ? patient.dateOfBirth.split("-").reverse().join("-") : "N/A"}
               </p>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 bg-white/10 hover:bg-red-500/30 border border-white/15 text-brand-beige px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
-          >
-            <LogOut size={14} /> Sign Out
-          </button>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 print:hidden">
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-1.5 bg-brand-cream/15 hover:bg-brand-cream/25 border border-brand-cream/20 text-brand-beige px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+            >
+              <UserPlus size={14} /> Add Family Member
+            </button>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 bg-white/10 hover:bg-red-500/30 border border-white/15 text-brand-beige px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+            >
+              <LogOut size={14} /> Sign Out
+            </button>
+          </div>
         </div>
       </div>
 
@@ -148,7 +330,7 @@ export default function PatientDashboard() {
       <div className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col lg:flex-row gap-6 min-h-0">
         
         {/* Left Side Tab Navigation */}
-        <div className="w-full lg:w-64 shrink-0 flex flex-col gap-3">
+        <div className="w-full lg:w-64 shrink-0 flex flex-col gap-3 print:hidden">
           <button
             onClick={() => setActiveTab("timeline")}
             className={`flex items-center gap-3 px-5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-left cursor-pointer ${
@@ -186,9 +368,9 @@ export default function PatientDashboard() {
           </button>
 
           <div className="mt-4 p-5 bg-brand-cream/40 border border-brand-light/45 rounded-2xl space-y-3 hidden lg:block">
-            <span className="text-[10px] font-bold text-brand-secondary uppercase tracking-widest block">Secure Patient Space</span>
+            <span className="text-[10px] font-bold text-brand-secondary uppercase tracking-widest block">Family Dashboard</span>
             <p className="text-[11px] text-brand-dark/65 leading-relaxed">
-              Your medical history is fully encrypted and private. If you notice any discrepancy, please contact Dr. Neha's team.
+              Managing health reports for you and your family. Switch profiles above or register dependents.
             </p>
           </div>
         </div>
@@ -196,12 +378,12 @@ export default function PatientDashboard() {
         {/* Right Side Content Panel */}
         <div className="flex-grow min-w-0">
           
-          {/* TAB 1: CONSULTATION TIMELINE */}
+          {/* TAB 1: TIMELINE */}
           {activeTab === "timeline" && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full items-start">
               
               {/* Visits List */}
-              <div className="md:col-span-1 bg-white border border-brand-light/50 rounded-2xl p-4 space-y-3 max-h-[600px] overflow-y-auto">
+              <div className="md:col-span-1 bg-white border border-brand-light/50 rounded-2xl p-4 space-y-3 max-h-[600px] overflow-y-auto print:hidden">
                 <h3 className="font-serif font-bold text-base text-brand-primary pb-2 border-b border-brand-light/20">
                   Visits Log ({visits.length})
                 </h3>
@@ -384,7 +566,7 @@ export default function PatientDashboard() {
           {activeTab === "profile" && (
             <div className="bg-white border border-brand-light/50 rounded-3xl p-6 md:p-8 space-y-8 shadow-sm">
               <div className="border-b border-brand-light/45 pb-4">
-                <h2 className="font-serif text-xl font-bold text-brand-primary">My Clinical History Card</h2>
+                <h2 className="font-serif text-xl font-bold text-brand-primary">Clinical History Card</h2>
                 <p className="text-xs text-brand-dark/65 font-sans mt-1">Information on file detailing chronic status, history, and active restrictions.</p>
               </div>
 
@@ -485,6 +667,127 @@ export default function PatientDashboard() {
 
         </div>
       </div>
+
+      {/* ─── ADD FAMILY MEMBER MODAL ─── */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="bg-brand-cream border border-brand-light/75 w-full max-w-md rounded-3xl p-6 md:p-8 space-y-4 shadow-2xl relative">
+            <button
+              onClick={() => {
+                setShowAddModal(false);
+                setModalError("");
+                setModalSuccess("");
+              }}
+              className="absolute right-4 top-4 p-1.5 hover:bg-brand-light/35 rounded-lg text-brand-primary transition-colors cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="text-center">
+              <h3 className="font-serif text-xl font-bold text-brand-primary">Register Dependents / Family</h3>
+              <p className="text-xs text-brand-dark/65 mt-1 font-sans">
+                Link existing profiles or register new children/spouse under your account.
+              </p>
+            </div>
+
+            {modalError && (
+              <div className="bg-red-50 border border-red-100 p-3 rounded-xl flex items-center gap-2.5 text-xs text-red-700 font-semibold">
+                <AlertCircle size={16} className="shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
+            {modalSuccess && (
+              <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-center gap-2.5 text-xs text-emerald-700 font-semibold">
+                <CheckCircle size={16} className="shrink-0" />
+                <span>{modalSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAddFamilyMember} className="space-y-4 pt-2">
+              <div>
+                <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Dependents Full Name</label>
+                <div className="relative">
+                  <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
+                  <input
+                    type="text"
+                    value={modalName}
+                    onChange={(e) => setModalName(e.target.value)}
+                    placeholder="Son's/Wife's Name"
+                    className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Registered Mobile (e.g. Parent's Mobile)</label>
+                <div className="relative">
+                  <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
+                  <input
+                    type="tel"
+                    value={modalMobile}
+                    onChange={(e) => setModalMobile(e.target.value)}
+                    placeholder="Enter phone number"
+                    className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Date of Birth</label>
+                  <div className="relative">
+                    <Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
+                    <input
+                      type="date"
+                      value={modalDob}
+                      onChange={(e) => setModalDob(e.target.value)}
+                      className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Relation</label>
+                  <select
+                    value={modalRelation}
+                    onChange={(e) => setModalRelation(e.target.value)}
+                    className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                  >
+                    <option value="Child">Child</option>
+                    <option value="Spouse">Spouse</option>
+                    <option value="Parent">Parent</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Gender</label>
+                <select
+                  value={modalGender}
+                  onChange={(e) => setModalGender(e.target.value)}
+                  className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                >
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={modalSubmitting}
+                className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md mt-2 cursor-pointer disabled:opacity-50"
+              >
+                {modalSubmitting ? "Processing..." : "Add Family Member"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

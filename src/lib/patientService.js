@@ -181,3 +181,43 @@ export async function seedDoctorsIfEmpty() {
     console.error("Error seeding doctors:", err);
   }
 }
+
+// Fetch all patient profiles linked to a Firebase Auth UID
+export async function getPatientsByUid(uid) {
+  if (!uid) return [];
+  try {
+    const { collection, getDocs, query, where } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+
+    const q = query(collection(fdb, "patients"), where("uid", "==", uid));
+    const snapshot = await getDocs(q);
+    const list = [];
+    snapshot.forEach((docSnap) => {
+      list.push({ patientId: docSnap.id, ...docSnap.data() });
+    });
+    return list;
+  } catch (err) {
+    console.error("Error fetching patients by uid:", err);
+    return [];
+  }
+}
+
+// Link an existing family member record by setting its uid
+export async function linkFamilyMemberToUid(patientId, uid, relation) {
+  if (!patientId || !uid) return false;
+  try {
+    const { doc, updateDoc } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+
+    const patientRef = doc(fdb, "patients", patientId);
+    await updateDoc(patientRef, {
+      uid: uid,
+      relation: relation || "Family Member",
+      linkedAt: new Date().toISOString()
+    });
+    return true;
+  } catch (err) {
+    console.error("Error linking family member to uid:", err);
+    return false;
+  }
+}
