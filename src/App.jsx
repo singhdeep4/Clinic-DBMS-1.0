@@ -5,6 +5,19 @@ import Footer from "./components/Footer";
 import Home from "./pages/Home";
 import DbmsDashboard from "./pages/DbmsDashboard";
 import Login from "./pages/Login";
+import PatientDashboard from "./pages/PatientDashboard";
+
+// Protected route for Doctors only
+function DoctorRoute({ children }) {
+  const isDoc = localStorage.getItem("ayurkaya_doctor_logged_in") === "true";
+  return isDoc ? children : <Navigate to="/login" replace />;
+}
+
+// Protected route for Patients only
+function PatientRoute({ children }) {
+  const isPatient = localStorage.getItem("ayurkaya_patient_logged_in") === "true";
+  return isPatient ? children : <Navigate to="/login" replace />;
+}
 
 // Component to scroll to top on route change
 function ScrollToTop() {
@@ -26,7 +39,16 @@ export default function App() {
         <main className="flex-grow">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/doctor" element={<DbmsDashboard />} />
+            <Route path="/doctor" element={
+              <DoctorRoute>
+                <DbmsDashboard />
+              </DoctorRoute>
+            } />
+            <Route path="/patient" element={
+              <PatientRoute>
+                <PatientDashboard />
+              </PatientRoute>
+            } />
             <Route path="/login" element={<Login />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

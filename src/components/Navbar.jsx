@@ -12,6 +12,7 @@ export default function Navbar() {
   const dropdownRef = useRef(null);
 
   const doctorLogged = localStorage.getItem("ayurkaya_doctor_logged_in") === "true";
+  const patientLogged = localStorage.getItem("ayurkaya_patient_logged_in") === "true";
 
   // Click outside to close dropdown
   useEffect(() => {
@@ -28,6 +29,8 @@ export default function Navbar() {
 
   const handleLogout = () => {
     localStorage.removeItem("ayurkaya_doctor_logged_in");
+    localStorage.removeItem("ayurkaya_patient_logged_in");
+    localStorage.removeItem("ayurkaya_patient_uid");
     setIsProfileOpen(false);
     navigate("/");
   };
@@ -59,7 +62,7 @@ export default function Navbar() {
                 location.pathname === "/" ? "text-brand-primary" : "text-brand-secondary/85 hover:text-brand-primary"
               }`}
             >
-              {doctorLogged ? "Dashboard" : "Home"}
+              {doctorLogged ? "Doctor Dashboard" : "Home"}
               {location.pathname === "/" && (
                 <motion.div
                   layoutId="navActiveLine"
@@ -68,8 +71,6 @@ export default function Navbar() {
                 />
               )}
             </Link>
-
-
           </div>
 
           {/* Desktop Session controls */}
@@ -120,13 +121,59 @@ export default function Navbar() {
                   )}
                 </AnimatePresence>
               </div>
+            ) : patientLogged ? (
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className="flex items-center gap-2 border border-brand-primary bg-brand-light/35 text-brand-primary hover:bg-brand-light px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer"
+                >
+                  <div className="w-5.5 h-5.5 rounded-full bg-brand-primary text-brand-beige flex items-center justify-center font-bold text-[10px] uppercase">
+                    PT
+                  </div>
+                  <span>My Portal</span>
+                  <ChevronDown size={14} className={`transition-transform duration-250 ${isProfileOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                <AnimatePresence>
+                  {isProfileOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2.5 w-52 bg-brand-cream border border-brand-light/75 rounded-2xl shadow-xl py-2 z-50 overflow-hidden"
+                    >
+                      <div className="px-4 py-2 border-b border-brand-light/30 bg-brand-beige/50">
+                        <p className="text-[9px] uppercase font-bold text-brand-secondary">Session Mode</p>
+                        <p className="text-xs font-bold text-brand-primary truncate">Patient Portal</p>
+                      </div>
+                      <Link
+                        to="/patient"
+                        onClick={() => setIsProfileOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-brand-primary hover:bg-brand-light transition-colors"
+                      >
+                        <LayoutDashboard size={14} className="text-brand-secondary" />
+                        <span>My Dashboard</span>
+                      </Link>
+                      <div className="border-t border-brand-light/25 my-1"></div>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                      >
+                        <LogOut size={14} />
+                        <span>Sign Out</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             ) : (
               <Link
                 to="/login"
                 className="flex items-center gap-1.5 border border-brand-secondary/35 hover:border-brand-primary text-brand-primary hover:bg-brand-light px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200"
               >
                 <Lock size={12} />
-                <span>Doctor Portal</span>
+                <span>Portal Login</span>
               </Link>
             )}
           </div>
@@ -164,9 +211,8 @@ export default function Navbar() {
                     : "text-brand-secondary hover:bg-brand-light/35"
                 }`}
               >
-                {doctorLogged ? "Dashboard" : "Home"}
+                {doctorLogged ? "Doctor Dashboard" : "Home"}
               </Link>
-
               
               <div className="pt-4 px-4 space-y-2 border-t border-brand-light/20">
                 {doctorLogged ? (
@@ -188,13 +234,32 @@ export default function Navbar() {
                       Sign Out
                     </button>
                   </>
+                ) : patientLogged ? (
+                  <>
+                    <Link
+                      to="/patient"
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center justify-center gap-1.5 w-full border border-brand-primary bg-brand-primary/10 text-brand-primary hover:bg-brand-light py-3 rounded-full text-sm font-bold tracking-wider uppercase transition-colors"
+                    >
+                      <LayoutDashboard size={14} /> My Dashboard
+                    </Link>
+                    <button
+                      onClick={() => {
+                        setIsOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full text-center border border-red-200 text-red-600 hover:bg-red-50 py-3 rounded-full text-sm font-bold tracking-wider uppercase transition-colors cursor-pointer"
+                    >
+                      Sign Out
+                    </button>
+                  </>
                 ) : (
                   <Link
                     to="/login"
                     onClick={() => setIsOpen(false)}
                     className="flex items-center justify-center gap-1.5 w-full border border-brand-secondary/30 text-brand-primary hover:bg-brand-light py-3 rounded-full text-sm font-bold tracking-wider uppercase transition-colors"
                   >
-                    <Lock size={14} /> Doctor Portal
+                    <Lock size={14} /> Portal Login
                   </Link>
                 )}
               </div>

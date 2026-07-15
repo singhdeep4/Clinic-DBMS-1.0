@@ -103,3 +103,42 @@ export async function getNextPatientId() {
     return "PAT-" + Math.floor(10000000 + Math.random() * 90000000);
   }
 }
+
+// Fetch patient details by Firebase Auth UID
+export async function getPatientByUid(uid) {
+  if (!uid) return null;
+  try {
+    const { collection, getDocs, query, where } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+
+    const q = query(collection(fdb, "patients"), where("uid", "==", uid));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return { patientId: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    }
+    return null;
+  } catch (err) {
+    console.error("Error fetching patient by uid:", err);
+    return null;
+  }
+}
+
+// Link an existing patient document to a Firebase Auth UID
+export async function linkPatientToUid(patientId, uid, email) {
+  if (!patientId || !uid) return false;
+  try {
+    const { doc, updateDoc } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+
+    const patientRef = doc(fdb, "patients", patientId);
+    await updateDoc(patientRef, {
+      uid: uid,
+      email: email,
+      linkedAt: new Date().toISOString()
+    });
+    return true;
+  } catch (err) {
+    console.error("Error linking patient to uid:", err);
+    return false;
+  }
+}
