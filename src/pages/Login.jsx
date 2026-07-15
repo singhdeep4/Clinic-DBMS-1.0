@@ -79,7 +79,8 @@ export default function Login() {
       const user = userCredential.user;
 
       if (role === "doctor") {
-        if (email.toLowerCase() !== "drneha@ayurkaya.com") {
+        const allowedDoctors = ["drneha@ayurkaya.com", "deep2006deep@gmail.com"];
+        if (!allowedDoctors.includes(email.toLowerCase())) {
           setErrorMsg("Access Denied: This account is not authorized as a doctor.");
           await auth.signOut();
           return;
