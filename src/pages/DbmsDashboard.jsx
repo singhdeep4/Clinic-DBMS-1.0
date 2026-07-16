@@ -276,6 +276,36 @@ export default function DbmsDashboard() {
   const [completedTabs, setCompletedTabs] = useState({});
   const [dbVisits, setDbVisits] = useState([]);
   const [dbPatients, setDbPatients] = useState([]);
+  const [doctorName, setDoctorName] = useState("Dr. Neha");
+
+  useEffect(() => {
+    let unsubscribe = () => {};
+    async function loadDoctorProfile() {
+      try {
+        const { auth } = await import("../lib/firebase.js");
+        unsubscribe = auth.onAuthStateChanged(async (user) => {
+          if (user && user.email) {
+            const { isDoctorAuthorized } = await import("../lib/patientService.js");
+            const profile = await isDoctorAuthorized(user.email);
+            if (profile && profile.name) {
+              setDoctorName(profile.name);
+            } else {
+              setDoctorName(user.email);
+            }
+          }
+        });
+      } catch (err) {
+        console.error("Error loading doctor profile:", err);
+      }
+    }
+    loadDoctorProfile();
+    return () => unsubscribe();
+  }, []);
+
+  const getFormattedDocName = () => {
+    if (doctorName.toLowerCase().startsWith("dr")) return doctorName;
+    return `Dr. ${doctorName}`;
+  };
 
   const allVisitsCases = useMemo(() => {
     const visitsMapped = dbVisits.map(v => {
@@ -1447,7 +1477,7 @@ export default function DbmsDashboard() {
     }
 
     let text = `*AYURKAYA AYURVEDIC CLINIC*\n`;
-    text += `*Chief Consultant:* Dr. Neha, B.A.M.S\n`;
+    text += `*Chief Consultant:* ${getFormattedDocName()}${doctorName === "Dr. Neha" ? ", B.A.M.S" : ""}\n`;
     text += `------------------------------------\n`;
     text += `*Patient Name:* ${currentCase.name}\n`;
     text += `*Patient ID:* ${currentCase.patientId || "N/A"}\n`;
@@ -2625,7 +2655,7 @@ export default function DbmsDashboard() {
               </p>
             </div>
             <div className="text-right space-y-1 shrink-0">
-              <h3 className="font-serif text-lg font-bold text-emerald-900">Dr. Neha, B.A.M.S</h3>
+              <h3 className="font-serif text-lg font-bold text-emerald-900">{getFormattedDocName()}{doctorName === "Dr. Neha" ? ", B.A.M.S" : ""}</h3>
               <p className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Chief Consultant Physician</p>
               <p className="text-xs text-gray-600">Reg No: AYUSH-A-2014-9023</p>
             </div>
@@ -2856,7 +2886,7 @@ export default function DbmsDashboard() {
             </div>
             <div className="text-center w-48 space-y-1">
               <div className="h-0.5 bg-gray-300 w-full mb-1" />
-              <p className="font-bold text-gray-900">Dr. Neha</p>
+              <p className="font-bold text-gray-900">{getFormattedDocName()}</p>
               <p className="text-[10px] uppercase font-bold text-gray-400">Consultant Signature</p>
             </div>
           </div>
@@ -2871,7 +2901,7 @@ export default function DbmsDashboard() {
 
   return (
     <div className="min-h-screen bg-brand-beige flex flex-col lg:flex-row font-sans relative">
-      <SEO title="Doctor Portal" description="Ayurkaya Clinic Dashboard for Dr. Neha." />
+      <SEO title="Doctor Portal" description={`Ayurkaya Clinic Dashboard for ${getFormattedDocName()}.`} />
 
       {/* Global Toast Notification */}
       {notification && (
@@ -3137,7 +3167,7 @@ export default function DbmsDashboard() {
         <div className="p-4 border-t border-brand-light/60 bg-brand-beige/40 flex justify-between items-center text-xs text-brand-secondary font-semibold shrink-0">
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            <span>Dr. Neha Portal</span>
+            <span>{getFormattedDocName()} Portal</span>
           </div>
           <button
             onClick={handleLogout}
@@ -5248,7 +5278,7 @@ export default function DbmsDashboard() {
                         <div className="text-[10px] text-brand-dark/55 flex justify-between items-center">
                           <span>Reported: {new Date(al.visitDate).toLocaleDateString()}</span>
                           <a
-                            href={`https://wa.me/91${al.mobile}?text=Hello%20${encodeURIComponent(al.patientName)}%2C%20this%20is%20Dr.%20Neha's%20clinic.%20We%20are%20reviewing%20your%20recent%20lab%20report%20for%20${encodeURIComponent(al.parameter)}.%20The%20measured%20value%20is%20${encodeURIComponent(al.measured)}.%20Please%20let%20us%20know%20when%20you%20can%20schedule%20a%20follow-up%20review.`}
+                            href={`https://wa.me/91${al.mobile}?text=Hello%20${encodeURIComponent(al.patientName)}%2C%20this%20is%20${encodeURIComponent(getFormattedDocName())}'s%20clinic.%20We%20are%20reviewing%20your%20recent%20lab%20report%20for%20${encodeURIComponent(al.parameter)}.%20The%20measured%20value%20is%20${encodeURIComponent(al.measured)}.%20Please%20let%20us%20know%20when%20you%20can%20schedule%20a%20follow-up%20review.`}
                             target="_blank"
                             rel="noreferrer"
                             className="flex items-center gap-1 text-green-700 hover:text-green-800 font-bold uppercase tracking-wider"
@@ -5295,7 +5325,7 @@ export default function DbmsDashboard() {
                           </p>
                         </div>
                         <a
-                          href={`https://wa.me/91${f.mobile}?text=Hello%20${encodeURIComponent(f.name)}%2C%20this%20is%20Dr.%20Neha's%20clinic%20(Ayurkaya).%20We%20are%20reviewing%20your%20recent%20consultation%20record%20for%20${encodeURIComponent(f.reason)}.%20How%20is%20your%20progress%20with%20your%20treatments%3F%20Please%20let%20us%20know%20if%20you%20need%20to%20coordinate%20a%20follow-up%20review.`}
+                          href={`https://wa.me/91${f.mobile}?text=Hello%20${encodeURIComponent(f.name)}%2C%20this%20is%20${encodeURIComponent(getFormattedDocName())}'s%20clinic%20(Ayurkaya).%20We%20are%20reviewing%20your%20recent%20consultation%20record%20for%20${encodeURIComponent(f.reason)}.%20How%20is%20your%20progress%20with%20your%20treatments%3F%20Please%20let%20us%20know%20if%20you%20need%20to%20coordinate%20a%20follow-up%20review.`}
                           target="_blank"
                           rel="noreferrer"
                           className="bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm shrink-0 cursor-pointer self-stretch sm:self-center text-center justify-center"
