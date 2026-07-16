@@ -36,15 +36,14 @@ export default function Login() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  // Seed Doctor & Admin Accounts if not present
+  // Seed Doctor Account if not present
   useEffect(() => {
     const seed = async () => {
       try {
-        const { seedDoctorsIfEmpty, seedAdminsIfEmpty } = await import("../lib/patientService.js");
+        const { seedDoctorsIfEmpty } = await import("../lib/patientService.js");
         await seedDoctorsIfEmpty();
-        await seedAdminsIfEmpty();
       } catch (err) {
-        console.error("Failed to seed doctors/admins list:", err);
+        console.error("Failed to seed doctors list:", err);
       }
     };
     seed();
@@ -99,8 +98,11 @@ export default function Login() {
       return;
     }
 
-    if (role === "admin") {
-      try {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      if (role === "admin") {
         const { getDoc, doc } = await import("firebase/firestore");
         const { db: fdb } = await import("../lib/firebase.js");
 
@@ -108,25 +110,18 @@ export default function Login() {
         const adminRef = doc(fdb, "admins", cleanEmail);
         const snap = await getDoc(adminRef);
 
-        if (snap.exists() && snap.data().password === password) {
+        if (snap.exists()) {
           localStorage.setItem("ayurkaya_admin_logged_in", "true");
-          setSuccessMsg("Admin authenticated successfully!");
+          setSuccessMsg("System administrator logged in successfully!");
           setTimeout(() => {
             navigate("/admin");
           }, 1000);
         } else {
-          setErrorMsg("Invalid administrator credentials.");
+          setErrorMsg("Access Denied: This account is not whitelisted as an administrator.");
+          await auth.signOut();
         }
-      } catch (err) {
-        console.error("Admin sign-in error:", err);
-        setErrorMsg("Failed to authenticate. Please try again.");
+        return;
       }
-      return;
-    }
-
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
 
       if (role === "doctor") {
         const { isDoctorAuthorized } = await import("../lib/patientService.js");
