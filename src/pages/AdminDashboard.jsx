@@ -23,6 +23,7 @@ export default function AdminDashboard() {
   // Doctor Form States
   const [docEmail, setDocEmail] = useState("");
   const [docName, setDocName] = useState("");
+  const [docRegCode, setDocRegCode] = useState("");
   const [docStatusMsg, setDocStatusMsg] = useState({ type: "", text: "" });
 
   // Patient Form States
@@ -74,8 +75,8 @@ export default function AdminDashboard() {
     e.preventDefault();
     setDocStatusMsg({ type: "", text: "" });
 
-    if (!docEmail.trim()) {
-      setDocStatusMsg({ type: "error", text: "Please enter a doctor's email." });
+    if (!docEmail.trim() || !docRegCode.trim()) {
+      setDocStatusMsg({ type: "error", text: "Please enter doctor email and registration code." });
       return;
     }
 
@@ -87,6 +88,7 @@ export default function AdminDashboard() {
         id: cleanEmail,
         email: cleanEmail,
         name: docName.trim() || "Doctor Account",
+        registrationCode: docRegCode.trim(),
         role: "doctor",
         createdAt: new Date().toISOString()
       });
@@ -94,6 +96,7 @@ export default function AdminDashboard() {
       setDocStatusMsg({ type: "success", text: `Doctor ${cleanEmail} authorized successfully!` });
       setDocEmail("");
       setDocName("");
+      setDocRegCode("");
       // Refresh list
       const updatedDocs = await getAllItems("doctors");
       setDoctors(updatedDocs);
@@ -345,6 +348,21 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider">Registration Code / Password</label>
+                    <div className="relative">
+                      <Shield size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-secondary/60" />
+                      <input
+                        type="text"
+                        value={docRegCode}
+                        onChange={(e) => setDocRegCode(e.target.value)}
+                        placeholder="Set registration code (e.g. doc123)"
+                        className="w-full bg-brand-cream/5 border border-brand-light/50 pl-10 pr-4 py-2.5 rounded-xl text-xs text-brand-dark focus:ring-2 focus:ring-brand-primary outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
                   <button
                     type="submit"
                     className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
@@ -370,7 +388,9 @@ export default function AdminDashboard() {
                       <div key={doc.id || doc.email} className="py-3 flex justify-between items-center gap-4 hover:bg-brand-cream/10 px-2 rounded-xl transition-all">
                         <div className="min-w-0">
                           <h4 className="text-xs font-bold text-brand-primary truncate">{doc.name || "Doctor"}</h4>
-                          <p className="text-[10px] text-brand-dark/60 font-mono truncate">{doc.email}</p>
+                          <p className="text-[10px] text-brand-dark/60 font-mono truncate">
+                            {doc.email} {doc.registrationCode && <span className="text-emerald-700 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded ml-2 font-sans font-bold uppercase text-[8px]">Code: {doc.registrationCode}</span>}
+                          </p>
                         </div>
                         <button
                           onClick={() => handleRemoveDoctor(doc.id || doc.email)}

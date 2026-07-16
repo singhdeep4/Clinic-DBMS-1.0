@@ -26,6 +26,7 @@ export default function Login() {
   const [dob, setDob] = useState("");
   const [gender, setGender] = useState("Male");
   const [age, setAge] = useState("");
+  const [registrationCode, setRegistrationCode] = useState("");
   
   // Google Linking State
   const [googleUserToLink, setGoogleUserToLink] = useState(null);
@@ -82,6 +83,7 @@ export default function Login() {
     setMobile("");
     setDob("");
     setAge("");
+    setRegistrationCode("");
     setGoogleUserToLink(null);
   };
 
@@ -202,18 +204,27 @@ export default function Login() {
     setSuccessMsg("");
 
     if (role === "doctor") {
-      if (!email || !password || !name) {
-        setErrorMsg("Please fill in all fields.");
+      if (!email || !password || !name || !registrationCode) {
+        setErrorMsg("Please fill in all fields including the registration code.");
         return;
       }
 
       try {
-        const { isDoctorAuthorized } = await import("../lib/patientService.js");
+        const { getDoc, doc } = await import("firebase/firestore");
+        const { db: fdb } = await import("../lib/firebase.js");
         const { putItem } = await import("../lib/db.js");
 
-        const authorized = await isDoctorAuthorized(email);
-        if (!authorized) {
+        const docRef = doc(fdb, "doctors", email.toLowerCase().trim());
+        const snap = await getDoc(docRef);
+
+        if (!snap.exists()) {
           setErrorMsg("Access Denied: This email address is not whitelisted as a doctor. Please contact the Admin.");
+          return;
+        }
+
+        const docData = snap.data();
+        if (docData.registrationCode && docData.registrationCode.trim() !== registrationCode.trim()) {
+          setErrorMsg("Access Denied: The registration code you entered is invalid.");
           return;
         }
 
@@ -660,6 +671,23 @@ export default function Login() {
                 />
               </div>
             </div>
+
+            {role === "doctor" && (
+              <div className="relative">
+                <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Registration Code / Temp Password</label>
+                <div className="relative">
+                  <Shield size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
+                  <input
+                    type="text"
+                    value={registrationCode}
+                    onChange={(e) => setRegistrationCode(e.target.value)}
+                    placeholder="Enter registration code from Admin"
+                    className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                    required
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="relative">
               <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Password</label>
