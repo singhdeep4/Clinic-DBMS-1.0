@@ -7,14 +7,17 @@ service cloud.firestore {
       allow read, write: if true;
     }
     
-    // 2. Patients collection: allow public reads to check/verify duplicate registrations,
-    // but only the authenticated doctor can add/edit patient records
+    // 2. Patients collection: allow public reads/writes so the admin and portal can manage profiles
     match /patients/{patientId} {
-      allow read: if true;
-      allow write: if request.auth != null;
+      allow read, write: if true;
+    }
+
+    // 3. Doctors collection: allow public reads/writes so the admin can whitelist and verify doctors
+    match /doctors/{doctorId} {
+      allow read, write: if true;
     }
     
-    // 3. Other collections: restrict entirely to the authenticated doctor portal users
+    // 4. Other collections: restrict entirely to the authenticated doctor portal users
     match /visits/{visitId} {
       allow read, write: if request.auth != null;
     }
