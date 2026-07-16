@@ -99,6 +99,15 @@ export default function Login() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
+      if (email.toLowerCase().trim() === "admin@ayurkaya.com") {
+        localStorage.setItem("ayurkaya_admin_logged_in", "true");
+        setSuccessMsg("Admin authenticated successfully!");
+        setTimeout(() => {
+          navigate("/admin");
+        }, 1000);
+        return;
+      }
+
       if (role === "doctor") {
         const { isDoctorAuthorized } = await import("../lib/patientService.js");
         const authorized = await isDoctorAuthorized(email);
@@ -147,6 +156,13 @@ export default function Login() {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
+
+      if (user.email && user.email.toLowerCase().trim() === "admin@ayurkaya.com") {
+        localStorage.setItem("ayurkaya_admin_logged_in", "true");
+        setSuccessMsg("Logged in successfully as Admin!");
+        setTimeout(() => navigate("/admin"), 1000);
+        return;
+      }
 
       const { isDoctorAuthorized, getPatientsByUid } = await import("../lib/patientService.js");
       const isDoc = await isDoctorAuthorized(user.email);

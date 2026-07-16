@@ -6,6 +6,7 @@ import Home from "./pages/Home";
 import DbmsDashboard from "./pages/DbmsDashboard";
 import Login from "./pages/Login";
 import PatientDashboard from "./pages/PatientDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
 
 // Protected route for Doctors only
 function DoctorRoute({ children }) {
@@ -17,6 +18,12 @@ function DoctorRoute({ children }) {
 function PatientRoute({ children }) {
   const isPatient = localStorage.getItem("ayurkaya_patient_logged_in") === "true";
   return isPatient ? children : <Navigate to="/login" replace />;
+}
+
+// Protected route for Admins only
+function AdminRoute({ children }) {
+  const isAdmin = localStorage.getItem("ayurkaya_admin_logged_in") === "true";
+  return isAdmin ? children : <Navigate to="/login" replace />;
 }
 
 // Component to scroll to top on route change
@@ -48,6 +55,11 @@ export default function App() {
               <PatientRoute>
                 <PatientDashboard />
               </PatientRoute>
+            } />
+            <Route path="/admin" element={
+              <AdminRoute>
+                <AdminDashboard />
+              </AdminRoute>
             } />
             <Route path="/login" element={<Login />} />
             <Route path="*" element={<Navigate to="/" replace />} />
