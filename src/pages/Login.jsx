@@ -36,14 +36,15 @@ export default function Login() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  // Seed Doctor Account if not present
+  // Seed Doctor & Admin Accounts if not present
   useEffect(() => {
     const seed = async () => {
       try {
-        const { seedDoctorsIfEmpty } = await import("../lib/patientService.js");
+        const { seedDoctorsIfEmpty, seedAdminsIfEmpty } = await import("../lib/patientService.js");
         await seedDoctorsIfEmpty();
+        await seedAdminsIfEmpty();
       } catch (err) {
-        console.error("Failed to seed doctors list:", err);
+        console.error("Failed to seed doctors/admins list:", err);
       }
     };
     seed();
@@ -98,15 +99,27 @@ export default function Login() {
       return;
     }
 
-    if (email.toLowerCase().trim() === "admin@ayurkaya.com") {
-      if (password === "admin123") {
-        localStorage.setItem("ayurkaya_admin_logged_in", "true");
-        setSuccessMsg("Admin authenticated successfully!");
-        setTimeout(() => {
-          navigate("/admin");
-        }, 1000);
-      } else {
-        setErrorMsg("Invalid Admin password.");
+    if (role === "admin") {
+      try {
+        const { getDoc, doc } = await import("firebase/firestore");
+        const { db: fdb } = await import("../lib/firebase.js");
+
+        const cleanEmail = email.toLowerCase().trim();
+        const adminRef = doc(fdb, "admins", cleanEmail);
+        const snap = await getDoc(adminRef);
+
+        if (snap.exists() && snap.data().password === password) {
+          localStorage.setItem("ayurkaya_admin_logged_in", "true");
+          setSuccessMsg("Admin authenticated successfully!");
+          setTimeout(() => {
+            navigate("/admin");
+          }, 1000);
+        } else {
+          setErrorMsg("Invalid administrator credentials.");
+        }
+      } catch (err) {
+        console.error("Admin sign-in error:", err);
+        setErrorMsg("Failed to authenticate. Please try again.");
       }
       return;
     }

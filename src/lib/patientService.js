@@ -184,6 +184,30 @@ export async function seedDoctorsIfEmpty() {
   }
 }
 
+// Seed admin account into Firestore if none exist
+export async function seedAdminsIfEmpty() {
+  try {
+    const { doc, setDoc, getDoc } = await import("firebase/firestore");
+    const { db: fdb } = await import("./firebase.js");
+
+    const email = "admin@ayurkaya.com";
+    const cleanEmail = email.toLowerCase().trim();
+    const docRef = doc(fdb, "admins", cleanEmail);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) {
+      await setDoc(docRef, {
+        email: cleanEmail,
+        password: "admin123",
+        role: "admin",
+        createdAt: new Date().toISOString()
+      });
+      console.log(`Seeded default admin account in Firestore: ${cleanEmail}`);
+    }
+  } catch (err) {
+    console.error("Error seeding admins:", err);
+  }
+}
+
 // Fetch all patient profiles linked to a Firebase Auth UID
 export async function getPatientsByUid(uid) {
   if (!uid) return [];
