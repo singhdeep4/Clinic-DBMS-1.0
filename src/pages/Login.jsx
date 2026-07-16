@@ -201,6 +201,54 @@ export default function Login() {
     setErrorMsg("");
     setSuccessMsg("");
 
+    if (role === "doctor") {
+      if (!email || !password || !name) {
+        setErrorMsg("Please fill in all fields.");
+        return;
+      }
+
+      try {
+        const { isDoctorAuthorized } = await import("../lib/patientService.js");
+        const { putItem } = await import("../lib/db.js");
+
+        const authorized = await isDoctorAuthorized(email);
+        if (!authorized) {
+          setErrorMsg("Access Denied: This email address is not whitelisted as a doctor. Please contact the Admin.");
+          return;
+        }
+
+        // Register account in Firebase Auth
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        // Send Verification Email
+        await sendEmailVerification(user);
+
+        // Update the doctor's document in Firestore with their name/UID
+        await putItem("doctors", {
+          id: email.toLowerCase().trim(),
+          email: email.toLowerCase().trim(),
+          name: name.trim(),
+          uid: user.uid,
+          role: "doctor",
+          updatedAt: new Date().toISOString()
+        });
+
+        // Log out immediately so they must verify
+        await auth.signOut();
+        setSuccessMsg("Doctor account registered! A verification link was sent to your email. Please verify, then sign in.");
+        
+        setTimeout(() => {
+          changeMode("signin");
+        }, 3500);
+
+      } catch (error) {
+        console.error("Doctor signup error:", error);
+        setErrorMsg(error?.message || "Registration failed.");
+      }
+      return;
+    }
+
     if (!email || !password || !name || !mobile || !dob) {
       setErrorMsg("Please fill in all fields.");
       return;
@@ -513,9 +561,75 @@ export default function Login() {
           </div>
         )}
 
-        {mode === "signup" && role === "patient" && (
+        {mode === "signup" && (role === "patient" || role === "doctor") && (
           <form onSubmit={handleSignUp} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {role === "patient" ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Full Name</label>
+                    <div className="relative">
+                      <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Enter your name"
+                        className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Mobile Number</label>
+                    <div className="relative">
+                      <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
+                      <input
+                        type="tel"
+                        value={mobile}
+                        onChange={(e) => setMobile(e.target.value)}
+                        placeholder="10-digit mobile"
+                        className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Date of Birth</label>
+                    <div className="relative">
+                      <Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
+                      <input
+                        type="date"
+                        value={dob}
+                        onChange={(e) => {
+                          setDob(e.target.value);
+                          setAge(calculateAge(e.target.value));
+                        }}
+                        className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Gender</label>
+                    <select
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value)}
+                      className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+              </>
+            ) : (
               <div>
                 <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Full Name</label>
                 <div className="relative">
@@ -524,60 +638,13 @@ export default function Login() {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Enter your name"
+                    placeholder="Dr. Firstname Lastname"
                     className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
                     required
                   />
                 </div>
               </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Mobile Number</label>
-                <div className="relative">
-                  <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
-                  <input
-                    type="tel"
-                    value={mobile}
-                    onChange={(e) => setMobile(e.target.value)}
-                    placeholder="10-digit mobile"
-                    className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Date of Birth</label>
-                <div className="relative">
-                  <Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
-                  <input
-                    type="date"
-                    value={dob}
-                    onChange={(e) => {
-                      setDob(e.target.value);
-                      setAge(calculateAge(e.target.value));
-                    }}
-                    className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Gender</label>
-                <select
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                  className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
-                >
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-            </div>
+            )}
 
             <div className="relative">
               <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Email Address</label>
@@ -587,7 +654,7 @@ export default function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="patient@example.com"
+                  placeholder={role === "doctor" ? "drneha@ayurkaya.com" : "patient@example.com"}
                   className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
                   required
                 />
