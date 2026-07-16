@@ -106,13 +106,13 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleRemoveDoctor = async (email) => {
-    if (!window.confirm(`Are you sure you want to revoke authorization for ${email}?`)) {
+  const handleRemoveDoctor = async (id, email) => {
+    if (!window.confirm(`Are you sure you want to revoke authorization for ${email || id}?`)) {
       return;
     }
 
     try {
-      await deleteItem("doctors", email);
+      await deleteItem("doctors", id);
       // Refresh list
       const updatedDocs = await getAllItems("doctors");
       setDoctors(updatedDocs);
@@ -393,7 +393,7 @@ export default function AdminDashboard() {
                           </p>
                         </div>
                         <button
-                          onClick={() => handleRemoveDoctor(doc.id || doc.email)}
+                          onClick={() => handleRemoveDoctor(doc.id, doc.email)}
                           className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors border border-transparent hover:border-red-100 cursor-pointer shrink-0"
                           title="Revoke Authorization"
                         >

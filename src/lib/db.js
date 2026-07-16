@@ -8,7 +8,7 @@ export async function getAllItems(storeName) {
     const { collection, getDocs } = await import("firebase/firestore");
     const { db: fdb } = await import("./firebase.js");
     const querySnapshot = await getDocs(collection(fdb, storeName));
-    return querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    return querySnapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id }));
   } catch (err) {
     console.error("Firestore getAllItems error:", err);
     return [];
@@ -27,6 +27,9 @@ export async function putItem(storeName, item) {
     else if (storeName === "archived_records") docId = String(item.archiveId || item.id || Date.now());
     else if (storeName === "cases") docId = item.patientId || String(Date.now());
     else if (storeName === "registry") docId = item.patientId || String(Date.now());
+    else if ((storeName === "doctors" || storeName === "admins") && item.email) {
+      docId = item.email.toLowerCase().trim();
+    }
 
     if (!docId) {
       docId = String(Date.now());
