@@ -2,11 +2,39 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../lib/firebase";
 import { getPatientsByUid, getPatientWithVisits, linkFamilyMemberToUid } from "../lib/patientService";
+import { putItem } from "../lib/db";
 import { 
   User, Calendar, Shield, LogOut, FileText, ClipboardList, CheckCircle, 
-  AlertCircle, Activity, Heart, Clock, Printer, MapPin, Phone, UserPlus, X, ChevronDown
+  AlertCircle, Activity, Heart, Clock, Printer, MapPin, Phone, UserPlus, X, ChevronDown, Sparkles
 } from "lucide-react";
 import SEO from "../components/SEO";
+
+const clinics = [
+  {
+    id: "aayushree",
+    name: "Aayushree Ayurved Polyclinic and Panchakarma Center",
+    address: `Shop No. 1 and 2, Shreeyash Building,\nBehind Link View Hotel,\nPandit Malharrao Kulkarni Road,\nBorivali (West), Mumbai – 400092, Maharashtra`,
+    days: "Monday • Wednesday • Friday",
+    times: ["19:00", "19:30", "20:00", "20:30"],
+    contact: "+91 7021272264"
+  },
+  {
+    id: "aaroyam",
+    name: "Aaroyam Panchakarma Centre",
+    address: `Shop No. 1, Charkop Vidyut CHS,\nPlot No. 234, Sector 5,\nCharkop, Kandivali (West),\nMumbai – 400067, Maharashtra`,
+    days: "Tuesday • Thursday",
+    times: ["19:00", "19:30", "20:00", "20:30"],
+    contact: "+91 9326973764 | +91 9152569247"
+  },
+  {
+    id: "dubal",
+    name: "Dubal's Clinic",
+    address: `Plot No. 329, D-42, Ravi Park Co-operative Housing Society,\nNear Sector 3, Charkop,\nR.S.C. Road No. 32, Kandivali (West),\nMumbai – 400067, Maharashtra`,
+    days: "Saturday",
+    times: ["19:00", "19:30", "20:00", "20:30"],
+    contact: "+91 7999253864"
+  }
+];
 
 export default function PatientDashboard() {
   const navigate = useNavigate();
@@ -14,10 +42,16 @@ export default function PatientDashboard() {
   const [patient, setPatient] = useState(null);
   const [visits, setVisits] = useState([]);
   const [selectedVisit, setSelectedVisit] = useState(null);
-  const [activeTab, setActiveTab] = useState("timeline"); // "timeline" | "profile" | "labs"
+  const [activeTab, setActiveTab] = useState("timeline"); // "timeline" | "profile" | "labs" | "booking"
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Booking states
+  const [bookingReason, setBookingReason] = useState("");
+  const [bookingTime, setBookingTime] = useState("");
+  const [selectedClinic, setSelectedClinic] = useState(null);
+  const [bookingStatus, setBookingStatus] = useState(""); // "" | "Booking..." | "success" | error string
 
   // Add Family Member Modal States
   const [showAddModal, setShowAddModal] = useState(false);
@@ -217,6 +251,50 @@ export default function PatientDashboard() {
     }
   };
 
+  const handleDashboardBooking = async () => {
+    if (!selectedClinic) {
+      setBookingStatus("Please select a clinic.");
+      return;
+    }
+    if (!bookingTime) {
+      setBookingStatus("Please select a preferred time slot.");
+      return;
+    }
+    if (!patient) {
+      setBookingStatus("No active patient profile found.");
+      return;
+    }
+
+    setBookingStatus("Booking...");
+
+    const payload = {
+      id: "Q-" + Date.now(),
+      name: patient.name,
+      age: patient.age || "",
+      gender: patient.gender || "Male",
+      mobile: patient.mobile,
+      dateOfBirth: patient.dateOfBirth || "",
+      reason: bookingReason.trim() ? `${bookingReason.trim()} (Returning - ${selectedClinic.name})` : `Walk-in - ${selectedClinic.name}`,
+      status: "Waiting",
+      timestamp: new Date().toISOString(),
+      preferredTime: bookingTime,
+      clinicId: selectedClinic.id,
+      clinicName: selectedClinic.name,
+      patientId: patient.patientId, // link profile
+      source: "patient_dashboard"
+    };
+
+    try {
+      await putItem("queue", payload);
+      setBookingStatus("success");
+      setBookingReason("");
+      setBookingTime("");
+    } catch (err) {
+      console.error("Booking failed:", err);
+      setBookingStatus("Failed to book appointment. Please try again.");
+    }
+  };
+
   const handlePrintVisit = (visit) => {
     if (!visit) return;
     window.print();
@@ -365,6 +443,24 @@ export default function PatientDashboard() {
           >
             <Activity size={16} />
             <span>Lab Reports & Vitals</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab("booking");
+              setBookingStatus("");
+              setBookingReason("");
+              setBookingTime("");
+              setSelectedClinic(null);
+            }}
+            className={`flex items-center gap-3 px-5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-left cursor-pointer ${
+              activeTab === "booking"
+                ? "bg-brand-primary text-brand-beige shadow-sm"
+                : "bg-white border border-brand-light/50 text-brand-primary hover:bg-brand-light/35"
+            }`}
+          >
+            <Calendar size={16} />
+            <span>Book Appointment</span>
           </button>
 
           <div className="mt-4 p-5 bg-brand-cream/40 border border-brand-light/45 rounded-2xl space-y-3 hidden lg:block">
@@ -660,6 +756,146 @@ export default function PatientDashboard() {
                 <div className="text-center py-20 bg-brand-cream/5 border border-brand-light/25 rounded-2xl">
                   <Activity size={32} className="text-brand-secondary/30 mx-auto mb-3 animate-pulse" />
                   <p className="text-sm text-brand-secondary/60 font-semibold">No lab chemistry or blood reports found on file.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: BOOK APPOINTMENT */}
+          {activeTab === "booking" && (
+            <div className="bg-white border border-brand-light/50 rounded-3xl p-6 md:p-8 space-y-6 shadow-sm">
+              <div className="border-b border-brand-light/45 pb-4">
+                <h2 className="font-serif text-xl font-bold text-brand-primary">Book Clinic Appointment</h2>
+                <p className="text-xs text-brand-dark/65 font-sans mt-1">
+                  Select a clinic, choose a preferred time slot, and confirm your slot.
+                </p>
+                <div className="mt-3 bg-brand-light/15 border border-brand-light/25 rounded-xl p-3 text-xs flex items-center justify-between text-brand-primary">
+                  <span>
+                    Booking for: <strong>{patient?.name}</strong> {patient?.relation ? `(${patient.relation})` : "(Primary Profile)"}
+                  </span>
+                  <span className="text-[10px] bg-brand-primary/10 px-2 py-0.5 rounded font-bold uppercase">
+                    {patient?.gender} • {patient?.age} Yrs
+                  </span>
+                </div>
+              </div>
+
+              {bookingStatus === "success" ? (
+                <div className="p-6 bg-emerald-50 rounded-2xl border border-emerald-200 text-center space-y-4">
+                  <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-serif font-semibold text-lg text-emerald-800">Booking Confirmed!</h3>
+                    <p className="text-xs text-emerald-700 mt-1">
+                      Your appointment has been successfully booked for {patient?.name}.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setBookingStatus("");
+                      setBookingReason("");
+                      setBookingTime("");
+                      setSelectedClinic(null);
+                    }}
+                    className="bg-brand-primary hover:bg-brand-secondary text-brand-beige px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
+                  >
+                    Book Another Appointment
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {bookingStatus && bookingStatus !== "Booking..." && (
+                    <div className="bg-red-50 border border-red-100 p-3 rounded-xl flex items-center gap-2.5 text-xs text-red-700 font-semibold">
+                      <AlertCircle size={16} className="shrink-0" />
+                      <span>{bookingStatus}</span>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-brand-secondary mb-3">1. Select Clinic</label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {clinics.map((c) => {
+                        const isSelected = selectedClinic?.id === c.id;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedClinic(c);
+                              setBookingTime("");
+                            }}
+                            className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between h-full cursor-pointer ${
+                              isSelected
+                                ? "border-brand-primary bg-brand-light/20 ring-2 ring-brand-primary/20 shadow-md"
+                                : "border-brand-light/50 bg-white hover:bg-brand-light/10 hover:border-brand-light"
+                            }`}
+                          >
+                            <div className="space-y-2">
+                              <span className="text-[10px] font-bold text-brand-secondary bg-brand-light px-2 py-0.5 rounded">
+                                {c.days}
+                              </span>
+                              <h4 className="font-serif font-bold text-sm text-brand-primary">{c.name}</h4>
+                              <p className="text-[11px] text-brand-dark/70 leading-relaxed line-clamp-3">{c.address}</p>
+                            </div>
+                            <div className="mt-4 pt-2 border-t border-brand-light/20 w-full flex justify-between items-center text-[10px] text-brand-secondary">
+                              <span>7:00 PM – 9:00 PM</span>
+                              <span>{c.contact.split("|")[0].trim()}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {selectedClinic && (
+                    <div className="space-y-5 animate-fadeIn">
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-brand-secondary mb-3">2. Select Preferred Time Slot</label>
+                        <div className="flex flex-wrap gap-2.5">
+                          {selectedClinic.times.map((t) => {
+                            const isTimeSelected = bookingTime === t;
+                            return (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => setBookingTime(t)}
+                                className={`px-4 py-2.5 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
+                                  isTimeSelected
+                                    ? "bg-brand-primary text-brand-beige shadow-sm"
+                                    : "bg-brand-cream/25 border border-brand-light/50 text-brand-primary hover:bg-brand-light/35"
+                                }`}
+                              >
+                                {t}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-brand-secondary">3. Reason for Visit (Optional)</label>
+                        <textarea
+                          rows={3}
+                          value={bookingReason}
+                          onChange={(e) => setBookingReason(e.target.value)}
+                          placeholder="Briefly describe your symptoms or medical concern..."
+                          className="w-full bg-brand-cream/5 border border-brand-light/50 rounded-2xl px-4 py-3 text-xs text-brand-dark focus:ring-2 focus:ring-brand-primary focus:border-brand-primary outline-none transition-all duration-150"
+                        />
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={handleDashboardBooking}
+                          disabled={bookingStatus === "Booking..."}
+                          className="w-full bg-brand-primary text-brand-beige py-3.5 rounded-2xl text-xs font-bold uppercase tracking-wider hover:bg-brand-secondary transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          <Sparkles size={14} />
+                          {bookingStatus === "Booking..." ? "Booking Slot..." : "Confirm Booking Slot"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
