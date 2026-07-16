@@ -94,7 +94,9 @@ export default function Home() {
   const isAuthenticated = localStorage.getItem("ayurkaya_doctor_logged_in") === "true";
   const isLoading = false;
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [doctorName, setDoctorName] = useState("Dr. Neha");
+  const [doctorName, setDoctorName] = useState(() => {
+    return localStorage.getItem("ayurkaya_doctor_name") || "";
+  });
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -108,8 +110,10 @@ export default function Home() {
               const profile = await isDoctorAuthorized(user.email);
               if (profile && profile.name) {
                 setDoctorName(profile.name);
+                localStorage.setItem("ayurkaya_doctor_name", profile.name);
               } else {
                 setDoctorName(user.email);
+                localStorage.setItem("ayurkaya_doctor_name", user.email);
               }
             }
           });
@@ -123,6 +127,7 @@ export default function Home() {
   }, [isAuthenticated]);
 
   const getFormattedDocName = () => {
+    if (!doctorName) return "";
     if (doctorName.toLowerCase().startsWith("dr")) return doctorName;
     return `Dr. ${doctorName}`;
   };
