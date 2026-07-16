@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, User, Calendar, Phone } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, User, Calendar, Phone, Shield } from "lucide-react";
 import SEO from "../components/SEO";
 import { auth } from "../lib/firebase";
 import { 
