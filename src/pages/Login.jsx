@@ -557,7 +557,7 @@ export default function Login() {
               </>
             )}
 
-            {role === "patient" && (
+            {role !== "admin" && (
               <div className="text-center pt-2 text-xs font-medium text-brand-secondary">
                 Don't have an account?{" "}
                 <button
