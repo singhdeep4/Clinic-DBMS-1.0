@@ -162,20 +162,22 @@ export async function isDoctorAuthorized(email) {
 // Seed doctor accounts into Firestore if none exist
 export async function seedDoctorsIfEmpty() {
   try {
-    const { collection, getDocs, doc, setDoc } = await import("firebase/firestore");
+    const { doc, setDoc, getDoc } = await import("firebase/firestore");
     const { db: fdb } = await import("./firebase.js");
 
-    const snapshot = await getDocs(collection(fdb, "doctors"));
-    if (snapshot.empty) {
-      const defaults = ["drneha@ayurkaya.com", "deep2006deep@gmail.com"];
-      for (const email of defaults) {
-        await setDoc(doc(fdb, "doctors", email), {
-          email: email.toLowerCase().trim(),
+    const defaults = ["drneha@ayurkaya.com", "deep2006deep@gmail.com"];
+    for (const email of defaults) {
+      const cleanEmail = email.toLowerCase().trim();
+      const docRef = doc(fdb, "doctors", cleanEmail);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) {
+        await setDoc(docRef, {
+          email: cleanEmail,
           role: "doctor",
           createdAt: new Date().toISOString()
         });
+        console.log(`Seeded default doctor account in Firestore: ${cleanEmail}`);
       }
-      console.log("Seeded default doctor accounts in Firestore.");
     }
   } catch (err) {
     console.error("Error seeding doctors:", err);

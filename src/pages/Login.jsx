@@ -95,18 +95,22 @@ export default function Login() {
       return;
     }
 
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      if (email.toLowerCase().trim() === "admin@ayurkaya.com") {
+    if (email.toLowerCase().trim() === "admin@ayurkaya.com") {
+      if (password === "admin123") {
         localStorage.setItem("ayurkaya_admin_logged_in", "true");
         setSuccessMsg("Admin authenticated successfully!");
         setTimeout(() => {
           navigate("/admin");
         }, 1000);
-        return;
+      } else {
+        setErrorMsg("Invalid Admin password.");
       }
+      return;
+    }
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
 
       if (role === "doctor") {
         const { isDoctorAuthorized } = await import("../lib/patientService.js");
