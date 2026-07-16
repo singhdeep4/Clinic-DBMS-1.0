@@ -1,3 +1,4 @@
+// Trigger Vercel Build - Refreshed
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, User, Calendar, Phone, Shield } from "lucide-react";
