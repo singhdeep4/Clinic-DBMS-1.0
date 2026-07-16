@@ -351,41 +351,54 @@ export default function Login() {
             Ayurkaya Clinic
           </span>
           <h2 className="font-serif text-3xl font-bold text-brand-primary mt-1">
-            {role === "doctor" ? "Doctor Portal" : "Patient Portal"}
+            {role === "doctor" ? "Doctor Portal" : role === "admin" ? "Admin Portal" : "Patient Portal"}
           </h2>
           <p className="text-xs text-brand-dark/65 mt-1 font-sans">
-            {role === "doctor" ? "Secure Access for Clinical Administration" : "Access your clinical records, prescriptions & lab results"}
+            {role === "doctor" ? "Secure Access for Clinical Administration" : role === "admin" ? "Configure Doctor & Patient Registry" : "Access your clinical records, prescriptions & lab results"}
           </p>
         </div>
 
         {/* Role Switcher tabs */}
         {mode !== "forgot" && mode !== "linkprofile" && (
-          <div className="flex bg-brand-beige p-1 rounded-xl border border-brand-light/35">
+          <div className="flex bg-brand-beige p-1 rounded-xl border border-brand-light/35 flex-wrap gap-1">
             <button
               onClick={() => {
                 setRole("patient");
                 changeMode("signin");
               }}
-              className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
+              className={`flex-1 min-w-[80px] py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
                 role === "patient"
                   ? "bg-brand-primary text-brand-beige shadow-sm"
                   : "text-brand-primary hover:bg-brand-light/30"
               }`}
             >
-              Patient Portal
+              Patient
             </button>
             <button
               onClick={() => {
                 setRole("doctor");
                 changeMode("signin");
               }}
-              className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
+              className={`flex-1 min-w-[80px] py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
                 role === "doctor"
                   ? "bg-brand-primary text-brand-beige shadow-sm"
                   : "text-brand-primary hover:bg-brand-light/30"
               }`}
             >
-              Doctor Access
+              Doctor
+            </button>
+            <button
+              onClick={() => {
+                setRole("admin");
+                changeMode("signin");
+              }}
+              className={`flex-1 min-w-[80px] py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
+                role === "admin"
+                  ? "bg-brand-primary text-brand-beige shadow-sm"
+                  : "text-brand-primary hover:bg-brand-light/30"
+              }`}
+            >
+              Admin
             </button>
           </div>
         )}
@@ -416,7 +429,7 @@ export default function Login() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder={role === "doctor" ? "drneha@ayurkaya.com" : "patient@example.com"}
+                    placeholder={role === "doctor" ? "drneha@ayurkaya.com" : role === "admin" ? "admin@ayurkaya.com" : "patient@example.com"}
                     className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary transition-all"
                     required
                   />
@@ -426,13 +439,15 @@ export default function Login() {
               <div className="relative">
                 <div className="flex justify-between items-center mb-2">
                   <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider">Password</label>
-                  <button
-                    type="button"
-                    onClick={() => changeMode("forgot")}
-                    className="text-[10px] font-bold text-brand-secondary hover:text-brand-primary uppercase tracking-wider"
-                  >
-                    Forgot?
-                  </button>
+                  {role !== "admin" && (
+                    <button
+                      type="button"
+                      onClick={() => changeMode("forgot")}
+                      className="text-[10px] font-bold text-brand-secondary hover:text-brand-primary uppercase tracking-wider"
+                    >
+                      Forgot?
+                    </button>
+                  )}
                 </div>
                 <div className="relative">
                   <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
@@ -462,22 +477,26 @@ export default function Login() {
               </button>
             </form>
 
-            {/* Google Sign In Divider & Button */}
-            <div className="relative flex items-center justify-center my-4">
-              <div className="absolute w-full border-t border-brand-light/45" />
-              <span className="relative bg-brand-cream px-3 text-[10px] font-bold text-brand-secondary uppercase tracking-widest">or login with</span>
-            </div>
+            {role !== "admin" && (
+              <>
+                {/* Google Sign In Divider & Button */}
+                <div className="relative flex items-center justify-center my-4">
+                  <div className="absolute w-full border-t border-brand-light/45" />
+                  <span className="relative bg-brand-cream px-3 text-[10px] font-bold text-brand-secondary uppercase tracking-widest">or login with</span>
+                </div>
 
-            <button
-              type="button"
-              onClick={handleGoogleSignIn}
-              className="w-full bg-white border border-brand-light hover:bg-brand-light/20 text-brand-primary py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                <path fill="#EA4335" d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.2-5.177 4.2-3.414 0-6.182-2.768-6.182-6.182s2.768-6.182 6.182-6.182c1.488 0 2.852.531 3.921 1.405l3.125-3.125C18.91 1.942 15.772 1 12.24 1 5.673 1 .327 6.346.327 12.913S5.673 24.825 12.24 24.825c6.262 0 11.233-5.064 11.233-11.233 0-.663-.08-1.295-.224-1.907l-11.009-.4z"/>
-              </svg>
-              Google Account
-            </button>
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  className="w-full bg-white border border-brand-light hover:bg-brand-light/20 text-brand-primary py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#EA4335" d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.2-5.177 4.2-3.414 0-6.182-2.768-6.182-6.182s2.768-6.182 6.182-6.182c1.488 0 2.852.531 3.921 1.405l3.125-3.125C18.91 1.942 15.772 1 12.24 1 5.673 1 .327 6.346.327 12.913S5.673 24.825 12.24 24.825c6.262 0 11.233-5.064 11.233-11.233 0-.663-.08-1.295-.224-1.907l-11.009-.4z"/>
+                  </svg>
+                  Google Account
+                </button>
+              </>
+            )}
 
             {role === "patient" && (
               <div className="text-center pt-2 text-xs font-medium text-brand-secondary">
