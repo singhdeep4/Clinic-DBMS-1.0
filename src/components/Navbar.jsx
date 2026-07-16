@@ -13,6 +13,38 @@ export default function Navbar() {
 
   const doctorLogged = localStorage.getItem("ayurkaya_doctor_logged_in") === "true";
   const patientLogged = localStorage.getItem("ayurkaya_patient_logged_in") === "true";
+  const [doctorName, setDoctorName] = useState("Dr. Neha");
+
+  useEffect(() => {
+    let unsubscribe = () => {};
+    if (doctorLogged) {
+      async function loadDoctorProfile() {
+        try {
+          const { auth } = await import("../lib/firebase.js");
+          unsubscribe = auth.onAuthStateChanged(async (user) => {
+            if (user && user.email) {
+              const { isDoctorAuthorized } = await import("../lib/patientService.js");
+              const profile = await isDoctorAuthorized(user.email);
+              if (profile && profile.name) {
+                setDoctorName(profile.name);
+              } else {
+                setDoctorName(user.email);
+              }
+            }
+          });
+        } catch (err) {
+          console.error("Error loading doctor profile in Navbar:", err);
+        }
+      }
+      loadDoctorProfile();
+    }
+    return () => unsubscribe();
+  }, [doctorLogged]);
+
+  const getFormattedDocName = () => {
+    if (doctorName.toLowerCase().startsWith("dr")) return doctorName;
+    return `Dr. ${doctorName}`;
+  };
 
   // Click outside to close dropdown
   useEffect(() => {
@@ -84,7 +116,7 @@ export default function Navbar() {
                   <div className="w-5.5 h-5.5 rounded-full bg-brand-primary text-brand-beige flex items-center justify-center font-bold text-[10px] uppercase">
                     DR
                   </div>
-                  <span>Dr. Neha</span>
+                  <span>{getFormattedDocName()}</span>
                   <ChevronDown size={14} className={`transition-transform duration-250 ${isProfileOpen ? "rotate-180" : ""}`} />
                 </button>
 
@@ -99,7 +131,7 @@ export default function Navbar() {
                     >
                       <div className="px-4 py-2 border-b border-brand-light/30 bg-brand-beige/50">
                         <p className="text-[9px] uppercase font-bold text-brand-secondary">Session Mode</p>
-                        <p className="text-xs font-bold text-brand-primary truncate">Dr. Neha Portal</p>
+                        <p className="text-xs font-bold text-brand-primary truncate">{getFormattedDocName()} Portal</p>
                       </div>
                       <Link
                         to="/doctor"

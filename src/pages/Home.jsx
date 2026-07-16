@@ -94,6 +94,38 @@ export default function Home() {
   const isAuthenticated = localStorage.getItem("ayurkaya_doctor_logged_in") === "true";
   const isLoading = false;
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [doctorName, setDoctorName] = useState("Dr. Neha");
+
+  useEffect(() => {
+    let unsubscribe = () => {};
+    if (isAuthenticated) {
+      async function loadDoctorProfile() {
+        try {
+          const { auth } = await import("../lib/firebase.js");
+          unsubscribe = auth.onAuthStateChanged(async (user) => {
+            if (user && user.email) {
+              const { isDoctorAuthorized } = await import("../lib/patientService.js");
+              const profile = await isDoctorAuthorized(user.email);
+              if (profile && profile.name) {
+                setDoctorName(profile.name);
+              } else {
+                setDoctorName(user.email);
+              }
+            }
+          });
+        } catch (err) {
+          console.error("Error loading doctor profile in Home:", err);
+        }
+      }
+      loadDoctorProfile();
+    }
+    return () => unsubscribe();
+  }, [isAuthenticated]);
+
+  const getFormattedDocName = () => {
+    if (doctorName.toLowerCase().startsWith("dr")) return doctorName;
+    return `Dr. ${doctorName}`;
+  };
 
   // Dashboard data
   const [totalPatients, setTotalPatients] = useState(0);
@@ -278,7 +310,7 @@ export default function Home() {
                 </span>
               </div>
               <h1 className="font-serif text-3xl md:text-4xl font-bold leading-tight">
-                {getGreeting()}, Dr. Neha
+                {getGreeting()}, {getFormattedDocName()}
               </h1>
               <p className="text-sm text-brand-light/75 mt-1.5 font-sans flex items-center gap-2">
                 <CalendarDays size={14} />
