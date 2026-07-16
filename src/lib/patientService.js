@@ -151,27 +151,7 @@ export async function isDoctorAuthorized(email) {
   }
 }
 
-// Seed doctor accounts into Firestore if none exist
-export async function seedDoctorsIfEmpty() {
-  try {
-    const defaults = ["drneha@ayurkaya.com", "deep2006deep@gmail.com"];
-    for (const email of defaults) {
-      const cleanEmail = email.toLowerCase().trim();
-      const docRef = doc(fdb, "doctors", cleanEmail);
-      const snap = await getDoc(docRef);
-      if (!snap.exists()) {
-        await setDoc(docRef, {
-          email: cleanEmail,
-          role: "doctor",
-          createdAt: new Date().toISOString()
-        });
-        console.log(`Seeded default doctor account in Firestore: ${cleanEmail}`);
-      }
-    }
-  } catch (err) {
-    console.error("Error seeding doctors:", err);
-  }
-}
+
 
 // Fetch all patient profiles linked to a Firebase Auth UID
 export async function getPatientsByUid(uid) {
