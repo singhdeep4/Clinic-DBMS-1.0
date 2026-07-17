@@ -165,6 +165,15 @@ export async function getPatientsByUid(uid, email = null) {
     });
 
     if (list.length > 0) {
+      // Ensure all loaded profiles have a familyCode
+      for (const p of list) {
+        if (!p.familyCode) {
+          const newCode = "FAM-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+          const patientRef = doc(fdb, "patients", p.patientId);
+          await updateDoc(patientRef, { familyCode: newCode });
+          p.familyCode = newCode;
+        }
+      }
       return list;
     }
 
@@ -178,15 +187,20 @@ export async function getPatientsByUid(uid, email = null) {
         const firstDoc = emailSnapshot.docs[0];
         const patientId = firstDoc.id;
         const patientRef = doc(fdb, "patients", patientId);
+        const patientData = firstDoc.data();
+
+        // Generate familyCode if missing
+        const newCode = patientData.familyCode || "FAM-" + Math.random().toString(36).substring(2, 8).toUpperCase();
 
         // Auto-link this profile to the user's UID
         await updateDoc(patientRef, {
           uid: uid,
-          relation: "Self" // Reset relation to Self
+          relation: "Self", // Reset relation to Self
+          familyCode: newCode
         });
 
         console.log(`Auto-linked email ${cleanEmail} to UID ${uid}`);
-        return [{ patientId, ...firstDoc.data(), uid: uid, relation: "Self" }];
+        return [{ patientId, ...patientData, uid: uid, relation: "Self", familyCode: newCode }];
       }
     }
 
@@ -211,5 +225,33 @@ export async function linkFamilyMemberToUid(patientId, uid, relation) {
   } catch (err) {
     console.error("Error linking family member to uid:", err);
     return false;
+  }
+}
+
+// Link an existing family member record by its unique familyCode
+export async function linkPatientByFamilyCode(familyCode, uid, relation) {
+  if (!familyCode || !uid) return false;
+  try {
+    const cleanCode = familyCode.trim().toUpperCase();
+    const q = query(collection(fdb, "patients"), where("familyCode", "==", cleanCode));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) {
+      throw new Error("No profile found with this Family Link Code. Please verify the code and try again.");
+    }
+
+    const docSnap = snapshot.docs[0];
+    const patientId = docSnap.id;
+    const patientRef = doc(fdb, "patients", patientId);
+
+    await updateDoc(patientRef, {
+      uid: uid,
+      relation: relation || "Family Member",
+      linkedAt: new Date().toISOString()
+    });
+
+    return { patientId, ...docSnap.data(), uid, relation: relation || "Family Member" };
+  } catch (err) {
+    console.error("Error linking patient by family code:", err);
+    throw err;
   }
 }

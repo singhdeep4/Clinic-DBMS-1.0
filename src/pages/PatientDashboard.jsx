@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../lib/firebase";
-import { getPatientsByUid, getPatientWithVisits, linkFamilyMemberToUid } from "../lib/patientService";
+import { getPatientsByUid, getPatientWithVisits, linkFamilyMemberToUid, linkPatientByFamilyCode } from "../lib/patientService";
 import { putItem } from "../lib/db";
 import { 
   User, Calendar, Shield, LogOut, FileText, ClipboardList, CheckCircle, 
@@ -66,6 +66,10 @@ export default function PatientDashboard() {
   const [modalSubmitting, setModalSubmitting] = useState(false);
 
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
+
+  // Link by Code States
+  const [modalTab, setModalTab] = useState("register"); // "register" | "linkcode"
+  const [modalLinkCode, setModalLinkCode] = useState("");
 
   // Edit Profile States
   const [isEditingContact, setIsEditingContact] = useState(false);
@@ -314,6 +318,47 @@ export default function PatientDashboard() {
       setContactError("Failed to update contact details. Please try again.");
     } finally {
       setContactSubmitting(false);
+    }
+  };
+
+  const handleLinkByCode = async (e) => {
+    e.preventDefault();
+    setModalError("");
+    setModalSuccess("");
+    setModalSubmitting(true);
+
+    if (!modalLinkCode) {
+      setModalError("Please enter a Family Link Code.");
+      setModalSubmitting(false);
+      return;
+    }
+
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        setModalError("Session expired. Please sign in again.");
+        setModalSubmitting(false);
+        return;
+      }
+
+      const result = await linkPatientByFamilyCode(modalLinkCode, user.uid, modalRelation);
+      setModalSuccess(`Successfully linked ${result.name} to your family account!`);
+      setModalLinkCode("");
+      
+      // Reload patients list and select newly linked patient
+      await loadAllLinkedPatients(user.uid, result.patientId);
+
+      setTimeout(() => {
+        setShowAddModal(false);
+        setModalSuccess("");
+        setModalTab("register");
+      }, 2000);
+
+    } catch (err) {
+      console.error("Link by code error:", err);
+      setModalError(err.message || "Failed to link profile by code.");
+    } finally {
+      setModalSubmitting(false);
     }
   };
 
@@ -834,6 +879,15 @@ export default function PatientDashboard() {
                         <span className="text-xs font-semibold text-brand-primary">{patient?.email || "Not linked"}</span>
                       </div>
                     </div>
+                    <div className="bg-brand-cream/10 border border-brand-light/30 p-4 rounded-xl flex items-center gap-3 sm:col-span-2">
+                      <UserPlus size={16} className="text-brand-secondary" />
+                      <div>
+                        <span className="text-[10px] text-brand-dark/50 font-bold uppercase block">Unique Family Link Code</span>
+                        <span className="text-xs font-mono font-bold text-brand-primary bg-brand-light/35 px-2.5 py-1 rounded select-all">
+                          {patient?.familyCode || "Generating..."}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <form onSubmit={handleUpdateContact} className="bg-brand-cream/10 border border-brand-light/30 p-6 rounded-2xl space-y-4 max-w-2xl animate-fadeIn">
@@ -1086,6 +1140,8 @@ export default function PatientDashboard() {
                 setShowAddModal(false);
                 setModalError("");
                 setModalSuccess("");
+                setModalTab("register");
+                setModalLinkCode("");
               }}
               className="absolute right-4 top-4 p-1.5 hover:bg-brand-light/35 rounded-lg text-brand-primary transition-colors cursor-pointer"
             >
@@ -1093,10 +1149,44 @@ export default function PatientDashboard() {
             </button>
 
             <div className="text-center">
-              <h3 className="font-serif text-xl font-bold text-brand-primary">Register Dependents / Family</h3>
+              <h3 className="font-serif text-xl font-bold text-brand-primary">Family Settings</h3>
               <p className="text-xs text-brand-dark/65 mt-1 font-sans">
-                Link existing profiles or register new children/spouse under your account.
+                Register new family members or link existing profiles using their link codes.
               </p>
+            </div>
+
+            {/* Tabs Switcher */}
+            <div className="flex bg-brand-beige p-1 rounded-xl border border-brand-light/35 gap-1 my-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalTab("register");
+                  setModalError("");
+                  setModalSuccess("");
+                }}
+                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                  modalTab === "register"
+                    ? "bg-brand-primary text-brand-beige shadow-sm"
+                    : "text-brand-primary hover:bg-brand-light/30"
+                }`}
+              >
+                Register New
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalTab("linkcode");
+                  setModalError("");
+                  setModalSuccess("");
+                }}
+                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                  modalTab === "linkcode"
+                    ? "bg-brand-primary text-brand-beige shadow-sm"
+                    : "text-brand-primary hover:bg-brand-light/30"
+                }`}
+              >
+                Link by Code
+              </button>
             </div>
 
             {modalError && (
@@ -1112,47 +1202,101 @@ export default function PatientDashboard() {
               </div>
             )}
 
-            <form onSubmit={handleAddFamilyMember} className="space-y-4 pt-2">
-              <div>
-                <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Dependents Full Name</label>
-                <div className="relative">
-                  <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
-                  <input
-                    type="text"
-                    value={modalName}
-                    onChange={(e) => setModalName(e.target.value)}
-                    placeholder="Son's/Wife's Name"
-                    className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Registered Mobile (e.g. Parent's Mobile)</label>
-                <div className="relative">
-                  <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
-                  <input
-                    type="tel"
-                    value={modalMobile}
-                    onChange={(e) => setModalMobile(e.target.value)}
-                    placeholder="Enter phone number"
-                    className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {modalTab === "register" ? (
+              <form onSubmit={handleAddFamilyMember} className="space-y-4 pt-1">
                 <div>
-                  <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Date of Birth</label>
+                  <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Dependents Full Name</label>
                   <div className="relative">
-                    <Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
+                    <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
                     <input
-                      type="date"
-                      value={modalDob}
-                      onChange={(e) => setModalDob(e.target.value)}
+                      type="text"
+                      value={modalName}
+                      onChange={(e) => setModalName(e.target.value)}
+                      placeholder="Son's/Wife's Name"
                       className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Registered Mobile (e.g. Parent's Mobile)</label>
+                  <div className="relative">
+                    <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
+                    <input
+                      type="tel"
+                      value={modalMobile}
+                      onChange={(e) => setModalMobile(e.target.value)}
+                      placeholder="Enter phone number"
+                      className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Date of Birth</label>
+                    <div className="relative">
+                      <Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
+                      <input
+                        type="date"
+                        value={modalDob}
+                        onChange={(e) => setModalDob(e.target.value)}
+                        className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Relation</label>
+                    <select
+                      value={modalRelation}
+                      onChange={(e) => setModalRelation(e.target.value)}
+                      className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                    >
+                      <option value="Child">Child</option>
+                      <option value="Spouse">Spouse</option>
+                      <option value="Parent">Parent</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Gender</label>
+                  <select
+                    value={modalGender}
+                    onChange={(e) => setModalGender(e.target.value)}
+                    className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={modalSubmitting}
+                  className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md mt-2 cursor-pointer disabled:opacity-50"
+                >
+                  {modalSubmitting ? "Processing..." : "Add Family Member"}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleLinkByCode} className="space-y-4 pt-1 animate-fadeIn">
+                <div>
+                  <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Enter Family Link Code</label>
+                  <div className="relative">
+                    <Shield size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
+                    <input
+                      type="text"
+                      value={modalLinkCode}
+                      onChange={(e) => setModalLinkCode(e.target.value)}
+                      placeholder="e.g. FAM-X8D2J5"
+                      className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary uppercase"
                       required
                     />
                   </div>
@@ -1171,29 +1315,16 @@ export default function PatientDashboard() {
                     <option value="Other">Other</option>
                   </select>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Gender</label>
-                <select
-                  value={modalGender}
-                  onChange={(e) => setModalGender(e.target.value)}
-                  className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                <button
+                  type="submit"
+                  disabled={modalSubmitting}
+                  className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md mt-2 cursor-pointer disabled:opacity-50"
                 >
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                disabled={modalSubmitting}
-                className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md mt-2 cursor-pointer disabled:opacity-50"
-              >
-                {modalSubmitting ? "Processing..." : "Add Family Member"}
-              </button>
-            </form>
+                  {modalSubmitting ? "Linking..." : "Link Profile"}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}
