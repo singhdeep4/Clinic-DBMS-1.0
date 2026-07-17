@@ -1,6 +1,6 @@
 import { getAllItems } from "./db.js";
 import { collection, getDocs, query, where, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
-import { db as fdb } from "./firebase.js";
+import { db as fdb, auth } from "./firebase.js";
 
 // Check if a patient already exists with the same phone and DOB
 export async function findDuplicatePatient(mobile, dob) {
@@ -154,7 +154,7 @@ export async function isDoctorAuthorized(email) {
 
 
 // Fetch all patient profiles linked to a Firebase Auth UID
-export async function getPatientsByUid(uid) {
+export async function getPatientsByUid(uid, email = null) {
   if (!uid) return [];
   try {
     const q = query(collection(fdb, "patients"), where("uid", "==", uid));
@@ -163,6 +163,33 @@ export async function getPatientsByUid(uid) {
     snapshot.forEach((docSnap) => {
       list.push({ patientId: docSnap.id, ...docSnap.data() });
     });
+
+    if (list.length > 0) {
+      return list;
+    }
+
+    // Fallback: If no profiles are linked to the UID, check if there's a profile with the user's email
+    const targetEmail = email || auth.currentUser?.email;
+    if (targetEmail) {
+      const cleanEmail = targetEmail.toLowerCase().trim();
+      const eq = query(collection(fdb, "patients"), where("email", "==", cleanEmail));
+      const emailSnapshot = await getDocs(eq);
+      if (!emailSnapshot.empty) {
+        const firstDoc = emailSnapshot.docs[0];
+        const patientId = firstDoc.id;
+        const patientRef = doc(fdb, "patients", patientId);
+
+        // Auto-link this profile to the user's UID
+        await updateDoc(patientRef, {
+          uid: uid,
+          relation: "Self" // Reset relation to Self
+        });
+
+        console.log(`Auto-linked email ${cleanEmail} to UID ${uid}`);
+        return [{ patientId, ...firstDoc.data(), uid: uid, relation: "Self" }];
+      }
+    }
+
     return list;
   } catch (err) {
     console.error("Error fetching patients by uid:", err);

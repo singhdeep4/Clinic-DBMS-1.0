@@ -145,7 +145,7 @@ export default function Login() {
         */
 
         const { getPatientsByUid } = await import("../lib/patientService.js");
-        const patients = await getPatientsByUid(user.uid);
+        const patients = await getPatientsByUid(user.uid, user.email);
         if (patients.length === 0) {
           setErrorMsg("Access Denied: No patient profile linked to this account. Please register first.");
           await auth.signOut();
@@ -209,7 +209,7 @@ export default function Login() {
         setSuccessMsg("Logged in successfully as Doctor!");
         setTimeout(() => navigate("/doctor"), 1000);
       } else {
-        const patients = await getPatientsByUid(user.uid);
+        const patients = await getPatientsByUid(user.uid, user.email);
         if (patients.length > 0) {
           localStorage.setItem("ayurkaya_patient_logged_in", "true");
           localStorage.setItem("ayurkaya_patient_uid", user.uid);

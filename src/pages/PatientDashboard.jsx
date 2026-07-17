@@ -77,7 +77,7 @@ export default function PatientDashboard() {
 
   const loadAllLinkedPatients = async (uid, selectId = null) => {
     try {
-      const list = await getPatientsByUid(uid);
+      const list = await getPatientsByUid(uid, auth.currentUser?.email);
       setPatientsList(list);
       
       if (list.length > 0) {
