@@ -233,7 +233,7 @@ export default function PatientDashboard() {
           relation: modalRelation,
           linkedAt: new Date().toISOString()
         });
-        setModalSuccess(`Successfully linked ${modalName}'s existing records to your family account!`);
+        setModalSuccess(`Successfully linked ${existing.name}'s existing records to your family account!`);
         selectedId = existing.patientId;
       } else {
         // Create new patient record
