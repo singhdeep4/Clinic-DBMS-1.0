@@ -36,6 +36,9 @@ export default function Login() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  const [canResend, setCanResend] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+
   useEffect(() => {
 
     const docAccount = localStorage.getItem("ayurkaya_doctor_account");
@@ -76,6 +79,7 @@ export default function Login() {
     setAge("");
     setRegistrationCode("");
     setGoogleUserToLink(null);
+    setCanResend(false);
   };
 
   const handleSignIn = async (e) => {
@@ -130,11 +134,15 @@ export default function Login() {
         }, 1000);
       } else {
         // Enforce Email Verification for Patient logins (except if signed in with Google)
+        // Disabled for frictionless sign-in
+        /*
         if (!user.emailVerified) {
           setErrorMsg("Please verify your email address before logging in. Check your inbox for the link we sent.");
+          setCanResend(true);
           await auth.signOut();
           return;
         }
+        */
 
         const { getPatientsByUid } = await import("../lib/patientService.js");
         const patients = await getPatientsByUid(user.uid);
@@ -153,6 +161,28 @@ export default function Login() {
     } catch (error) {
       console.error("Firebase sign in error:", error);
       setErrorMsg(error?.message || "Invalid email or password credentials.");
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!email || !password) {
+      setErrorMsg("Please enter your email and password above to resend the verification link.");
+      return;
+    }
+    setResendLoading(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await sendEmailVerification(userCredential.user);
+      setSuccessMsg("A fresh verification link has been sent to your email. Please check your inbox!");
+      await auth.signOut();
+      setCanResend(false);
+    } catch (err) {
+      console.error("Resend verification error:", err);
+      setErrorMsg(err?.message || "Failed to resend verification link. Please double check credentials.");
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -233,9 +263,6 @@ export default function Login() {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // Send Verification Email
-        await sendEmailVerification(user);
-
         // Update the doctor's document in Firestore with their name/UID
         await putItem("doctors", {
           id: email.toLowerCase().trim(),
@@ -246,13 +273,15 @@ export default function Login() {
           updatedAt: new Date().toISOString()
         });
 
-        // Log out immediately so they must verify
-        await auth.signOut();
-        setSuccessMsg("Doctor account registered! A verification link was sent to your email. Please verify, then sign in.");
+        // Auto-login doctor
+        localStorage.setItem("ayurkaya_doctor_logged_in", "true");
+        localStorage.setItem("ayurkaya_doctor_email", email.toLowerCase().trim());
+        localStorage.setItem("ayurkaya_doctor_name", name.trim());
+        setSuccessMsg("Doctor account registered successfully! Redirecting...");
         
         setTimeout(() => {
-          changeMode("signin");
-        }, 3500);
+          navigate("/doctor");
+        }, 1500);
 
       } catch (error) {
         console.error("Doctor signup error:", error);
@@ -283,12 +312,11 @@ export default function Login() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 3. Send Verification Email
-      await sendEmailVerification(user);
-
       // 4. Link or create Firestore document
+      let patientName = name;
       if (existingPatient) {
         await linkPatientToUid(existingPatient.patientId, user.uid, email);
+        patientName = existingPatient.name || name;
       } else {
         const nextId = await getNextPatientId();
         const newPatient = {
@@ -305,13 +333,14 @@ export default function Login() {
         await putItem("patients", newPatient);
       }
 
-      // Log out immediately so they must verify and log in
-      await auth.signOut();
-      setSuccessMsg("Account registered! A verification link was sent to your email. Please verify, then sign in.");
+      // Auto-login patient
+      localStorage.setItem("ayurkaya_patient_logged_in", "true");
+      localStorage.setItem("ayurkaya_patient_uid", user.uid);
+      setSuccessMsg(`Account registered successfully! Welcome, ${patientName}! Redirecting...`);
       
       setTimeout(() => {
-        changeMode("signin");
-      }, 3500);
+        navigate("/patient");
+      }, 1500);
 
     } catch (error) {
       console.error("Sign up error:", error);
@@ -465,9 +494,21 @@ export default function Login() {
 
         {/* Errors and Success alerts */}
         {errorMsg && (
-          <div className="bg-red-50 border border-red-100 p-3 rounded-xl flex items-center gap-2.5 text-xs text-red-700 font-semibold">
-            <AlertCircle size={16} className="shrink-0" />
-            <span>{errorMsg}</span>
+          <div className="bg-red-50 border border-red-100 p-3 rounded-xl flex flex-col gap-2 text-xs text-red-700 font-semibold">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle size={16} className="shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+            {canResend && (
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                disabled={resendLoading}
+                className="text-left text-brand-primary underline hover:text-brand-secondary font-bold pl-6.5 mt-1 cursor-pointer disabled:opacity-50"
+              >
+                {resendLoading ? "Sending Link..." : "Resend Verification Link"}
+              </button>
+            )}
           </div>
         )}
         {successMsg && (

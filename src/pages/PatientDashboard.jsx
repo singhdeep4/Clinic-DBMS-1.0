@@ -5,7 +5,8 @@ import { getPatientsByUid, getPatientWithVisits, linkFamilyMemberToUid } from ".
 import { putItem } from "../lib/db";
 import { 
   User, Calendar, Shield, LogOut, FileText, ClipboardList, CheckCircle, 
-  AlertCircle, Activity, Heart, Clock, Printer, MapPin, Phone, UserPlus, X, ChevronDown, Sparkles
+  AlertCircle, Activity, Heart, Clock, Printer, MapPin, Phone, UserPlus, X, ChevronDown, Sparkles,
+  Mail
 } from "lucide-react";
 import SEO from "../components/SEO";
 
@@ -65,6 +66,14 @@ export default function PatientDashboard() {
   const [modalSubmitting, setModalSubmitting] = useState(false);
 
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
+
+  // Edit Profile States
+  const [isEditingContact, setIsEditingContact] = useState(false);
+  const [editMobile, setEditMobile] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [contactError, setContactError] = useState("");
+  const [contactSuccess, setContactSuccess] = useState("");
+  const [contactSubmitting, setContactSubmitting] = useState(false);
 
   const loadAllLinkedPatients = async (uid, selectId = null) => {
     try {
@@ -248,6 +257,63 @@ export default function PatientDashboard() {
       setModalError("Failed to add family member.");
     } finally {
       setModalSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (patient) {
+      setEditMobile(patient.mobile || "");
+      setEditEmail(patient.email || "");
+      setContactError("");
+      setContactSuccess("");
+      setIsEditingContact(false);
+    }
+  }, [patient]);
+
+  const handleUpdateContact = async (e) => {
+    e.preventDefault();
+    setContactError("");
+    setContactSuccess("");
+    setContactSubmitting(true);
+
+    const cleanMobile = editMobile.replace(/[^0-9]/g, "");
+    if (cleanMobile.length !== 10) {
+      setContactError("Please enter a valid 10-digit mobile number.");
+      setContactSubmitting(false);
+      return;
+    }
+
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        setContactError("Session expired. Please sign in again.");
+        setContactSubmitting(false);
+        return;
+      }
+
+      const updatedPatient = {
+        ...patient,
+        mobile: cleanMobile,
+        email: editEmail.trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await putItem("patients", updatedPatient);
+      setContactSuccess("Contact details updated successfully!");
+      
+      // Refresh patient listing and select current patient to see updates
+      await loadAllLinkedPatients(user.uid, patient.patientId);
+      
+      setTimeout(() => {
+        setIsEditingContact(false);
+        setContactSuccess("");
+      }, 1500);
+
+    } catch (err) {
+      console.error("Error updating contact details:", err);
+      setContactError("Failed to update contact details. Please try again.");
+    } finally {
+      setContactSubmitting(false);
     }
   };
 
@@ -716,6 +782,113 @@ export default function PatientDashboard() {
                     {patient?.surgicalHistory || "No historical surgical procedures recorded on file."}
                   </p>
                 </div>
+              </div>
+
+              {/* Contact Information Section */}
+              <div className="border-t border-brand-light/35 pt-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="font-serif font-bold text-base text-brand-primary">Contact & Communication</h3>
+                    <p className="text-[11px] text-brand-dark/60 font-sans">Manage your active contact number and portal email registration details.</p>
+                  </div>
+                  {!isEditingContact && (
+                    <button
+                      onClick={() => {
+                        setEditMobile(patient?.mobile || "");
+                        setEditEmail(patient?.email || "");
+                        setIsEditingContact(true);
+                      }}
+                      className="bg-brand-cream/30 hover:bg-brand-light/40 border border-brand-light/65 text-brand-primary px-3.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <User size={12} /> Edit Details
+                    </button>
+                  )}
+                </div>
+
+                {contactSuccess && (
+                  <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-center gap-2.5 text-xs text-emerald-700 font-semibold max-w-md animate-fadeIn">
+                    <CheckCircle size={16} className="shrink-0" />
+                    <span>{contactSuccess}</span>
+                  </div>
+                )}
+                {contactError && (
+                  <div className="bg-red-50 border border-red-100 p-3 rounded-xl flex items-center gap-2.5 text-xs text-red-700 font-semibold max-w-md animate-fadeIn">
+                    <AlertCircle size={16} className="shrink-0" />
+                    <span>{contactError}</span>
+                  </div>
+                )}
+
+                {!isEditingContact ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-brand-cream/10 border border-brand-light/30 p-4 rounded-xl flex items-center gap-3">
+                      <Phone size={16} className="text-brand-secondary" />
+                      <div>
+                        <span className="text-[10px] text-brand-dark/50 font-bold uppercase block">Mobile Number</span>
+                        <span className="text-xs font-semibold text-brand-primary">{patient?.mobile ? patient.mobile.replace(/(\d{5})(\d{5})/, "$1-$2") : "Not provided"}</span>
+                      </div>
+                    </div>
+                    <div className="bg-brand-cream/10 border border-brand-light/30 p-4 rounded-xl flex items-center gap-3">
+                      <Mail size={16} className="text-brand-secondary" />
+                      <div>
+                        <span className="text-[10px] text-brand-dark/50 font-bold uppercase block">Email Address</span>
+                        <span className="text-xs font-semibold text-brand-primary">{patient?.email || "Not linked"}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleUpdateContact} className="bg-brand-cream/10 border border-brand-light/30 p-6 rounded-2xl space-y-4 max-w-2xl animate-fadeIn">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider">Mobile Number</label>
+                        <div className="relative">
+                          <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-secondary/60" />
+                          <input
+                            type="tel"
+                            value={editMobile}
+                            onChange={(e) => setEditMobile(e.target.value)}
+                            placeholder="Enter 10-digit mobile"
+                            className="w-full bg-white border border-brand-light/50 pl-10 pr-3 py-2 rounded-xl text-xs focus:outline-none focus:border-brand-secondary"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider">Email Address</label>
+                        <div className="relative">
+                          <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-secondary/60" />
+                          <input
+                            type="email"
+                            value={editEmail}
+                            onChange={(e) => setEditEmail(e.target.value)}
+                            placeholder="Enter email address"
+                            className="w-full bg-white border border-brand-light/50 pl-10 pr-3 py-2 rounded-xl text-xs focus:outline-none focus:border-brand-secondary"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 pt-1">
+                      <button
+                        type="submit"
+                        disabled={contactSubmitting}
+                        className="bg-brand-primary hover:bg-brand-secondary text-brand-beige px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {contactSubmitting ? "Saving..." : "Save Changes"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingContact(false);
+                          setContactError("");
+                        }}
+                        className="bg-white border border-brand-light/50 hover:bg-brand-light/20 text-brand-primary px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             </div>
           )}
