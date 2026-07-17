@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../lib/firebase";
+import { sendPasswordResetEmail } from "firebase/auth";
 import { getAllItems, putItem, deleteItem } from "../lib/db";
 import { 
   User, Shield, LogOut, CheckCircle, AlertCircle, Trash2, Search, 
-  UserPlus, Mail, Plus, Activity, Calendar, Phone, Sparkles
+  UserPlus, Mail, Plus, Activity, Calendar, Phone, Sparkles, Edit, Key
 } from "lucide-react";
 import SEO from "../components/SEO";
 
@@ -32,6 +33,8 @@ export default function AdminDashboard() {
   const [patDob, setPatDob] = useState("");
   const [patGender, setPatGender] = useState("Male");
   const [patAge, setPatAge] = useState("");
+  const [patEmail, setPatEmail] = useState("");
+  const [editingPatient, setEditingPatient] = useState(null);
   const [patStatusMsg, setPatStatusMsg] = useState({ type: "", text: "" });
 
   const loadData = async () => {
@@ -194,6 +197,86 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error("Failed to delete patient:", err);
       alert("Failed to delete patient profile.");
+    }
+  };
+
+  const handleEditPatientSelect = (pat) => {
+    setEditingPatient(pat);
+    setPatName(pat.name || "");
+    setPatMobile(pat.mobile || "");
+    setPatDob(pat.dateOfBirth || "");
+    setPatGender(pat.gender || "Male");
+    setPatAge(pat.age || "");
+    setPatEmail(pat.email || "");
+    setPatStatusMsg({ type: "", text: "" });
+  };
+
+  const handleCancelPatientEdit = () => {
+    setEditingPatient(null);
+    setPatName("");
+    setPatMobile("");
+    setPatDob("");
+    setPatGender("Male");
+    setPatAge("");
+    setPatEmail("");
+    setPatStatusMsg({ type: "", text: "" });
+  };
+
+  const handleSavePatientEdits = async (e) => {
+    e.preventDefault();
+    setPatStatusMsg({ type: "", text: "" });
+
+    if (!patName.trim() || !patMobile.trim() || !patDob) {
+      setPatStatusMsg({ type: "error", text: "Please fill in Name, Mobile, and Date of Birth." });
+      return;
+    }
+
+    const cleanMobile = patMobile.replace(/[^0-9]/g, "");
+    if (cleanMobile.length !== 10) {
+      setPatStatusMsg({ type: "error", text: "Please enter a valid 10-digit mobile number." });
+      return;
+    }
+
+    try {
+      const updatedPatient = {
+        ...editingPatient,
+        name: patName.trim(),
+        mobile: cleanMobile,
+        dateOfBirth: patDob,
+        gender: patGender,
+        age: patAge.trim() || calculateAge(patDob) || "N/A",
+        email: patEmail.trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await putItem("patients", updatedPatient);
+
+      setPatStatusMsg({ type: "success", text: `Patient profile for ${patName} updated successfully!` });
+      
+      // Reset editing states
+      handleCancelPatientEdit();
+
+      // Refresh list
+      const updatedPats = await getAllItems("patients");
+      setPatients(updatedPats);
+    } catch (err) {
+      console.error("Failed to update patient:", err);
+      setPatStatusMsg({ type: "error", text: "Failed to update patient profile. Please try again." });
+    }
+  };
+
+  const handleSendPasswordReset = async (email) => {
+    if (!email) {
+      setPatStatusMsg({ type: "error", text: "Patient profile has no email linked." });
+      return;
+    }
+    setPatStatusMsg({ type: "", text: "" });
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setPatStatusMsg({ type: "success", text: `Password reset email dispatched successfully to ${email}!` });
+    } catch (err) {
+      console.error("Failed to send reset email:", err);
+      setPatStatusMsg({ type: "error", text: `Failed to trigger reset email: ${err.message}` });
     }
   };
 
@@ -414,8 +497,14 @@ export default function AdminDashboard() {
               {/* Patient Form Panel */}
               <div className="lg:col-span-1 bg-white border border-brand-light/50 rounded-3xl p-6 space-y-5 shadow-xs">
                 <div className="border-b border-brand-light/20 pb-3">
-                  <h3 className="font-serif font-bold text-base text-brand-primary">Create Patient Profile</h3>
-                  <p className="text-[11px] text-brand-dark/60">Create a clinical profile card for a new patient manually.</p>
+                  <h3 className="font-serif font-bold text-base text-brand-primary">
+                    {editingPatient ? "Edit Patient Profile" : "Create Patient Profile"}
+                  </h3>
+                  <p className="text-[11px] text-brand-dark/60">
+                    {editingPatient 
+                      ? `Modify details or reset passwords for ${editingPatient.patientId}.`
+                      : "Create a clinical profile card for a new patient manually."}
+                  </p>
                 </div>
 
                 {patStatusMsg.text && (
@@ -429,7 +518,7 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
-                <form onSubmit={handleAddPatient} className="space-y-4">
+                <form onSubmit={editingPatient ? handleSavePatientEdits : handleAddPatient} className="space-y-4">
                   <div className="space-y-1">
                     <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider">Patient Full Name</label>
                     <div className="relative">
@@ -500,12 +589,53 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <button
-                    type="submit"
-                    className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <UserPlus size={14} /> Create Patient Profile
-                  </button>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider">Portal Email (Optional)</label>
+                    <div className="relative">
+                      <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-secondary/60" />
+                      <input
+                        type="email"
+                        value={patEmail}
+                        onChange={(e) => setPatEmail(e.target.value)}
+                        placeholder="patient@example.com"
+                        className="w-full bg-brand-cream/5 border border-brand-light/50 pl-10 pr-4 py-2.5 rounded-xl text-xs text-brand-dark focus:ring-2 focus:ring-brand-primary outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <button
+                      type="submit"
+                      className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {editingPatient ? <CheckCircle size={14} /> : <UserPlus size={14} />}
+                      {editingPatient ? "Save Changes" : "Create Patient Profile"}
+                    </button>
+
+                    {editingPatient && (
+                      <>
+                        {patEmail && (
+                          <button
+                            type="button"
+                            onClick={() => handleSendPasswordReset(patEmail)}
+                            className="w-full bg-amber-600/15 hover:bg-amber-600/25 text-amber-800 border border-amber-600/35 py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Key size={14} /> Send Reset Password Email
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleCancelPatientEdit}
+                          className="w-full bg-brand-cream/35 border border-brand-light text-brand-primary py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider hover:bg-brand-light/45 transition-colors cursor-pointer"
+                        >
+                          Cancel Editing
+                        </button>
+                        <p className="text-[9px] text-brand-dark/50 text-center leading-relaxed mt-2 select-none">
+                          Passwords can only be reset via secure email link. To set them manually, use the Google Firebase Console.
+                        </p>
+                      </>
+                    )}
+                  </div>
                 </form>
               </div>
 
@@ -532,7 +662,7 @@ export default function AdminDashboard() {
                     No matching patient profiles found.
                   </p>
                 ) : (
-                  <div className="divide-y divide-brand-light/20 max-h-[500px] overflow-y-auto pr-1">
+                  <div className="divide-y divide-brand-light/20 max-h-[320px] overflow-y-auto pr-1">
                     {filteredPatients.map((pat) => (
                       <div key={pat.id || pat.patientId} className="py-3 flex justify-between items-center gap-4 hover:bg-brand-cream/10 px-2 rounded-xl transition-all">
                         <div className="min-w-0">
@@ -548,15 +678,30 @@ export default function AdminDashboard() {
                             <span>DOB: {pat.dateOfBirth ? pat.dateOfBirth.split("-").reverse().join("-") : "N/A"}</span>
                             <span>•</span>
                             <span>Gender: {pat.gender}</span>
+                            {pat.email && (
+                              <>
+                                <span>•</span>
+                                <span className="truncate">Email: <strong>{pat.email}</strong></span>
+                              </>
+                            )}
                           </p>
                         </div>
-                        <button
-                          onClick={() => handleRemovePatient(pat.id || pat.patientId, pat.name)}
-                          className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors border border-transparent hover:border-red-100 cursor-pointer shrink-0"
-                          title="Delete Patient Card"
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => handleEditPatientSelect(pat)}
+                            className="p-2 hover:bg-brand-light/40 text-brand-primary rounded-lg transition-colors border border-transparent hover:border-brand-light/75 cursor-pointer"
+                            title="Edit Patient Details"
+                          >
+                            <Edit size={15} />
+                          </button>
+                          <button
+                            onClick={() => handleRemovePatient(pat.id || pat.patientId, pat.name)}
+                            className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors border border-transparent hover:border-red-100 cursor-pointer"
+                            title="Delete Patient Card"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
