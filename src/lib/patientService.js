@@ -153,60 +153,76 @@ export async function isDoctorAuthorized(email) {
 
 
 
-// Fetch all patient profiles linked to a Firebase Auth UID
+// Fetch all patient profiles sharing a familyId associated with a Firebase Auth UID
 export async function getPatientsByUid(uid, email = null) {
   if (!uid) return [];
   try {
+    // Step 1: Find the patient profile linked to this login UID
     const q = query(collection(fdb, "patients"), where("uid", "==", uid));
     const snapshot = await getDocs(q);
+    let primaryProfile = null;
+    if (!snapshot.empty) {
+      primaryProfile = { patientId: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    }
+
+    // Fallback: check by email if no profile matched UID
+    if (!primaryProfile) {
+      const targetEmail = email || auth.currentUser?.email;
+      if (targetEmail) {
+        const cleanEmail = targetEmail.toLowerCase().trim();
+        const eq = query(collection(fdb, "patients"), where("email", "==", cleanEmail));
+        const emailSnapshot = await getDocs(eq);
+        if (!emailSnapshot.empty) {
+          const firstDoc = emailSnapshot.docs[0];
+          const patientId = firstDoc.id;
+          const patientRef = doc(fdb, "patients", patientId);
+          const patientData = firstDoc.data();
+          
+          // Auto-link UID and save
+          await updateDoc(patientRef, {
+            uid: uid,
+            relation: "Self"
+          });
+          primaryProfile = { patientId, ...patientData, uid: uid, relation: "Self" };
+          console.log(`Auto-linked email ${cleanEmail} to UID ${uid}`);
+        }
+      }
+    }
+
+    if (!primaryProfile) {
+      return [];
+    }
+
+    // Ensure primaryProfile has a familyId initialized
+    let familyId = primaryProfile.familyId;
+    if (!familyId) {
+      familyId = "FAMID-" + primaryProfile.patientId.replace("PAT-", "");
+      const patientRef = doc(fdb, "patients", primaryProfile.patientId);
+      await updateDoc(patientRef, { familyId: familyId });
+      primaryProfile.familyId = familyId;
+    }
+
+    // Step 2: Query all profiles sharing this familyId
+    const familyQuery = query(collection(fdb, "patients"), where("familyId", "==", familyId));
+    const familySnapshot = await getDocs(familyQuery);
     const list = [];
-    snapshot.forEach((docSnap) => {
+    familySnapshot.forEach((docSnap) => {
       list.push({ patientId: docSnap.id, ...docSnap.data() });
     });
 
-    if (list.length > 0) {
-      // Ensure all loaded profiles have a familyCode
-      for (const p of list) {
-        if (!p.familyCode) {
-          const newCode = "FAM-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-          const patientRef = doc(fdb, "patients", p.patientId);
-          await updateDoc(patientRef, { familyCode: newCode });
-          p.familyCode = newCode;
-        }
-      }
-      return list;
-    }
-
-    // Fallback: If no profiles are linked to the UID, check if there's a profile with the user's email
-    const targetEmail = email || auth.currentUser?.email;
-    if (targetEmail) {
-      const cleanEmail = targetEmail.toLowerCase().trim();
-      const eq = query(collection(fdb, "patients"), where("email", "==", cleanEmail));
-      const emailSnapshot = await getDocs(eq);
-      if (!emailSnapshot.empty) {
-        const firstDoc = emailSnapshot.docs[0];
-        const patientId = firstDoc.id;
-        const patientRef = doc(fdb, "patients", patientId);
-        const patientData = firstDoc.data();
-
-        // Generate familyCode if missing
-        const newCode = patientData.familyCode || "FAM-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-
-        // Auto-link this profile to the user's UID
-        await updateDoc(patientRef, {
-          uid: uid,
-          relation: "Self", // Reset relation to Self
-          familyCode: newCode
-        });
-
-        console.log(`Auto-linked email ${cleanEmail} to UID ${uid}`);
-        return [{ patientId, ...patientData, uid: uid, relation: "Self", familyCode: newCode }];
+    // Ensure all family members have a familyCode
+    for (const p of list) {
+      if (!p.familyCode) {
+        const newCode = "FAM-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+        const patientRef = doc(fdb, "patients", p.patientId);
+        await updateDoc(patientRef, { familyCode: newCode });
+        p.familyCode = newCode;
       }
     }
 
     return list;
   } catch (err) {
-    console.error("Error fetching patients by uid:", err);
+    console.error("Error fetching patients by uid/familyId:", err);
     return [];
   }
 }
@@ -228,28 +244,79 @@ export async function linkFamilyMemberToUid(patientId, uid, relation) {
   }
 }
 
-// Link an existing family member record by its unique familyCode
-export async function linkPatientByFamilyCode(familyCode, uid, relation) {
-  if (!familyCode || !uid) return false;
+// Time-based rotating hash generator (TOTP signature)
+export function getRotatingHash(patientId, offsetBlocks = 0) {
+  if (!patientId) return "";
+  const timeBlock = Math.floor(Date.now() / 30000) + offsetBlocks;
+  const str = patientId + "_" + timeBlock + "_ayurkayaSalt1008";
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let sig = "";
+  let val = Math.abs(hash);
+  for (let i = 0; i < 4; i++) {
+    sig += chars[val % chars.length];
+    val = Math.floor(val / chars.length);
+  }
+  return sig;
+}
+
+// Link an existing family member record by its rotating familyCode
+export async function linkPatientByFamilyCode(enteredCode, uid, relation) {
+  if (!enteredCode || !uid) return false;
   try {
-    const cleanCode = familyCode.trim().toUpperCase();
-    const q = query(collection(fdb, "patients"), where("familyCode", "==", cleanCode));
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) {
-      throw new Error("No profile found with this Family Link Code. Please verify the code and try again.");
+    const cleanCode = enteredCode.trim().toUpperCase();
+    const parts = cleanCode.split("-");
+    if (parts.length !== 3 || parts[0] !== "FAM" || !parts[1] || !parts[2]) {
+      throw new Error("Invalid Link Code format. Code must be like FAM-00000001-A4B9");
     }
 
-    const docSnap = snapshot.docs[0];
-    const patientId = docSnap.id;
-    const patientRef = doc(fdb, "patients", patientId);
+    const patientNum = parts[1];
+    const enteredHash = parts[2];
+    const targetPatientId = `PAT-${patientNum}`;
 
-    await updateDoc(patientRef, {
-      uid: uid,
+    // 1. Fetch target patient record
+    const targetRef = doc(fdb, "patients", targetPatientId);
+    const targetSnap = await getDoc(targetRef);
+    if (!targetSnap.exists()) {
+      throw new Error("No profile found matching the ID in the link code.");
+    }
+    const targetPatient = targetSnap.data();
+
+    // 2. Validate rotating signature (check current and previous 30s blocks for latency)
+    const expectedCurrent = getRotatingHash(targetPatientId, 0);
+    const expectedPrevious = getRotatingHash(targetPatientId, -1);
+    
+    if (enteredHash !== expectedCurrent && enteredHash !== expectedPrevious) {
+      throw new Error("This Family Link Code has expired. Please copy the fresh code and try again.");
+    }
+
+    // 3. Retrieve linking user's profile to copy their familyId
+    const linkingUserQuery = query(collection(fdb, "patients"), where("uid", "==", uid));
+    const linkingUserSnapshot = await getDocs(linkingUserQuery);
+    if (linkingUserSnapshot.empty) {
+      throw new Error("Your primary account profile is missing. Please sign up or contact admin.");
+    }
+    
+    const linkingProfileDoc = linkingUserSnapshot.docs[0];
+    const linkingProfile = linkingProfileDoc.data();
+    
+    let currentFamilyId = linkingProfile.familyId;
+    if (!currentFamilyId) {
+      currentFamilyId = "FAMID-" + linkingProfileDoc.id.replace("PAT-", "");
+      await updateDoc(doc(fdb, "patients", linkingProfileDoc.id), { familyId: currentFamilyId });
+    }
+
+    // 4. Update the target profile's familyId to link them under the same family
+    await updateDoc(targetRef, {
+      familyId: currentFamilyId,
       relation: relation || "Family Member",
       linkedAt: new Date().toISOString()
     });
 
-    return { patientId, ...docSnap.data(), uid, relation: relation || "Family Member" };
+    return { patientId: targetPatientId, ...targetPatient, familyId: currentFamilyId, relation: relation || "Family Member" };
   } catch (err) {
     console.error("Error linking patient by family code:", err);
     throw err;

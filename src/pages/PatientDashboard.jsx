@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../lib/firebase";
-import { getPatientsByUid, getPatientWithVisits, linkFamilyMemberToUid, linkPatientByFamilyCode } from "../lib/patientService";
+import { getPatientsByUid, getPatientWithVisits, linkFamilyMemberToUid, linkPatientByFamilyCode, getRotatingHash } from "../lib/patientService";
 import { putItem } from "../lib/db";
 import { 
   User, Calendar, Shield, LogOut, FileText, ClipboardList, CheckCircle, 
@@ -70,6 +70,10 @@ export default function PatientDashboard() {
   // Link by Code States
   const [modalTab, setModalTab] = useState("register"); // "register" | "linkcode"
   const [modalLinkCode, setModalLinkCode] = useState("");
+  
+  // Rotating Code States
+  const [rotatingCode, setRotatingCode] = useState("");
+  const [countdown, setCountdown] = useState(30);
 
   // Edit Profile States
   const [isEditingContact, setIsEditingContact] = useState(false);
@@ -218,12 +222,22 @@ export default function PatientDashboard() {
       let selectedId = null;
 
       if (existing) {
-        // Link them
-        await linkFamilyMemberToUid(existing.patientId, user.uid, modalRelation);
+        // Link them under same familyId and user UID
+        const currentFamilyId = patient?.familyId || "FAMID-" + patient?.patientId?.replace("PAT-", "");
+        const { doc, updateDoc } = await import("firebase/firestore");
+        const { db: fdb } = await import("../lib/firebase.js");
+        const targetRef = doc(fdb, "patients", existing.patientId);
+        await updateDoc(targetRef, {
+          familyId: currentFamilyId,
+          uid: user.uid,
+          relation: modalRelation,
+          linkedAt: new Date().toISOString()
+        });
         setModalSuccess(`Successfully linked ${modalName}'s existing records to your family account!`);
         selectedId = existing.patientId;
       } else {
         // Create new patient record
+        const currentFamilyId = patient?.familyId || "FAMID-" + patient?.patientId?.replace("PAT-", "");
         const nextId = await getNextPatientId();
         const newPatient = {
           patientId: nextId,
@@ -233,6 +247,7 @@ export default function PatientDashboard() {
           gender: modalGender,
           age: calculateAge(modalDob) || "N/A",
           uid: user.uid,
+          familyId: currentFamilyId,
           relation: modalRelation,
           createdAt: new Date().toISOString()
         };
@@ -272,6 +287,25 @@ export default function PatientDashboard() {
       setContactSuccess("");
       setIsEditingContact(false);
     }
+  }, [patient]);
+
+  useEffect(() => {
+    if (!patient || !patient.patientId) return;
+
+    const updateCodeAndCountdown = () => {
+      const ms = Date.now();
+      const currentBlock = Math.floor(ms / 30000);
+      const nextBlockTime = (currentBlock + 1) * 30000;
+      const secondsLeft = Math.max(0, Math.round((nextBlockTime - ms) / 1000));
+      setCountdown(secondsLeft);
+
+      const formattedCode = `FAM-${patient.patientId.replace("PAT-", "")}-${getRotatingHash(patient.patientId)}`;
+      setRotatingCode(formattedCode);
+    };
+
+    updateCodeAndCountdown();
+    const interval = setInterval(updateCodeAndCountdown, 1000);
+    return () => clearInterval(interval);
   }, [patient]);
 
   const handleUpdateContact = async (e) => {
@@ -879,13 +913,21 @@ export default function PatientDashboard() {
                         <span className="text-xs font-semibold text-brand-primary">{patient?.email || "Not linked"}</span>
                       </div>
                     </div>
-                    <div className="bg-brand-cream/10 border border-brand-light/30 p-4 rounded-xl flex items-center gap-3 sm:col-span-2">
-                      <UserPlus size={16} className="text-brand-secondary" />
-                      <div>
-                        <span className="text-[10px] text-brand-dark/50 font-bold uppercase block">Unique Family Link Code</span>
-                        <span className="text-xs font-mono font-bold text-brand-primary bg-brand-light/35 px-2.5 py-1 rounded select-all">
-                          {patient?.familyCode || "Generating..."}
-                        </span>
+                    <div className="bg-brand-cream/10 border border-brand-light/30 p-4 rounded-xl flex items-center justify-between sm:col-span-2 flex-wrap gap-3">
+                      <div className="flex items-center gap-3">
+                        <UserPlus size={16} className="text-brand-secondary shrink-0" />
+                        <div>
+                          <span className="text-[10px] text-brand-dark/50 font-bold uppercase block">Rotating Family Link Code</span>
+                          <span className="text-sm font-mono font-bold text-brand-primary bg-brand-light/35 px-3 py-1.5 rounded select-all tracking-wider">
+                            {rotatingCode || "Generating..."}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-right">
+                        <div className="h-6.5 w-6.5 rounded-full border-2 border-brand-secondary/40 flex items-center justify-center text-[10px] font-bold text-brand-secondary font-mono animate-pulse">
+                          {countdown}s
+                        </div>
+                        <span className="text-[9px] text-brand-dark/50 font-bold uppercase tracking-wider block">Expires soon</span>
                       </div>
                     </div>
                   </div>
