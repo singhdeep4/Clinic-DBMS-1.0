@@ -92,6 +92,17 @@ export default function PatientDashboard() {
 
   const handleConfirmUnlink = async () => {
     if (!unlinkTarget?.patientId) return;
+    
+    // Hierarchy Permission Check: Only Primary Account Owner can separate family members
+    const primaryOwnerDoc = patientsList.find(item => item.uid === auth.currentUser?.uid || item.isPrimary || item.relation === "Self");
+    const isCurrentLoggedInPrimary = (primaryOwnerDoc?.uid && auth.currentUser?.uid && primaryOwnerDoc.uid === auth.currentUser.uid) || (primaryOwnerDoc?.isPrimary && patient?.patientId === primaryOwnerDoc?.patientId);
+    
+    if (!isCurrentLoggedInPrimary) {
+      triggerNotification("Permission Denied: Only the Primary Account Owner can separate family profiles.");
+      setUnlinkTarget(null);
+      return;
+    }
+
     setUnlinking(true);
     try {
       await unlinkFamilyMember(unlinkTarget.patientId);
@@ -647,19 +658,28 @@ export default function PatientDashboard() {
                                 {p.relation || "Self"}
                               </span>
                             </button>
-                            {(!p.isPrimary && p.relation !== "Self") && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setUnlinkTarget(p);
-                                  setIsSwitcherOpen(false);
-                                }}
-                                className="ml-2 text-red-600 hover:bg-red-100 p-1 rounded transition-colors cursor-pointer"
-                                title="Separate / Unlink Profile from Family"
-                              >
-                                <UserX size={13} />
-                              </button>
-                            )}
+                            {(() => {
+                              const primaryOwnerDoc = patientsList.find(item => item.uid === auth.currentUser?.uid || item.isPrimary || item.relation === "Self");
+                              const isCurrentLoggedInPrimary = (primaryOwnerDoc?.uid && auth.currentUser?.uid && primaryOwnerDoc.uid === auth.currentUser.uid) || (primaryOwnerDoc?.isPrimary && patient?.patientId === primaryOwnerDoc?.patientId);
+                              const isTargetDependent = p.patientId !== primaryOwnerDoc?.patientId && !p.isPrimary && p.relation !== "Self";
+                              
+                              if (isCurrentLoggedInPrimary && isTargetDependent) {
+                                return (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setUnlinkTarget(p);
+                                      setIsSwitcherOpen(false);
+                                    }}
+                                    className="ml-2 text-red-600 hover:bg-red-100 p-1.5 rounded-lg transition-colors cursor-pointer"
+                                    title="Separate / Unlink Profile from Family (Primary Permission)"
+                                  >
+                                    <UserX size={14} />
+                                  </button>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
                         ))}
                       </div>
