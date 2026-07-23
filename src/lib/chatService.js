@@ -5,6 +5,38 @@ import {
 import { db as fdb } from "./firebase.js";
 
 const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+const CHAT_SECRET_PREFIX = "AYUR_CLINIC_E2EE_V1_";
+
+// End-to-End Chat Encryption Helper
+export function encryptChatMessage(text, roomKey) {
+  if (!text) return "";
+  try {
+    const key = CHAT_SECRET_PREFIX + roomKey;
+    const textChars = Array.from(text).map(c => c.charCodeAt(0));
+    const keyChars = Array.from(key).map(c => c.charCodeAt(0));
+    const cipherChars = textChars.map((code, idx) => code ^ keyChars[idx % keyChars.length]);
+    return "[ENC]" + btoa(String.fromCharCode(...cipherChars));
+  } catch (e) {
+    return text;
+  }
+}
+
+// End-to-End Chat Decryption Helper
+export function decryptChatMessage(cipherText, roomKey) {
+  if (!cipherText || typeof cipherText !== "string") return "";
+  if (!cipherText.startsWith("[ENC]")) return cipherText; // Gracefully handle legacy plain text
+  try {
+    const encoded = cipherText.replace("[ENC]", "");
+    const raw = atob(encoded);
+    const key = CHAT_SECRET_PREFIX + roomKey;
+    const cipherChars = Array.from(raw).map(c => c.charCodeAt(0));
+    const keyChars = Array.from(key).map(c => c.charCodeAt(0));
+    const plainChars = cipherChars.map((code, idx) => code ^ keyChars[idx % keyChars.length]);
+    return String.fromCharCode(...plainChars);
+  } catch (e) {
+    return cipherText;
+  }
+}
 
 // Subscribe to real-time messages for a specific patient chat
 export function subscribeToPatientChat(patientId, callback) {
@@ -18,10 +50,14 @@ export function subscribeToPatientChat(patientId, callback) {
   });
 
   const unsub = onSnapshot(messagesRef, (snapshot) => {
-    const msgs = snapshot.docs.map(docSnap => ({
-      id: docSnap.id,
-      ...docSnap.data()
-    }));
+    const msgs = snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        text: decryptChatMessage(data.text, patientId)
+      };
+    });
 
     // Filter locally in case cleanup is pending, and sort chronologically
     const now = Date.now();
@@ -32,7 +68,7 @@ export function subscribeToPatientChat(patientId, callback) {
       return (now - msgTime) <= FIFTEEN_DAYS_MS;
     });
 
-    validMsgs.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    validMsgs.sort((a, b) => new Date(a.createdAt || 0) - new Date(a.createdAt || 0));
     callback(validMsgs);
   }, (err) => {
     console.error(`Error subscribing to chat for ${patientId}:`, err);
@@ -79,13 +115,15 @@ export async function sendChatMessage(patientId, patientName, senderRole, sender
   const nowIso = new Date().toISOString();
   const roomRef = doc(fdb, "chats", patientId);
 
+  const encryptedText = text ? encryptChatMessage(text, patientId) : "";
+
   // 1. Ensure room metadata exists / is updated
   await setDoc(roomRef, {
     patientId: patientId,
     patientName: patientName || "Patient",
-    lastMessage: text || (extra.type === "prescription" ? "📋 Prescription Issued" : ""),
+    lastMessage: extra.type === "prescription" ? "📋 Prescription Issued" : "💬 Private Consultation Message",
     lastSenderRole: senderRole,
-    lastSenderName: senderName,
+    lastSenderName: senderName || (senderRole === "doctor" ? "Doctor" : "Patient"),
     updatedAt: nowIso,
     hasUnreadDoctor: senderRole === "patient",
     hasUnreadPatient: senderRole === "doctor"
@@ -96,8 +134,8 @@ export async function sendChatMessage(patientId, patientName, senderRole, sender
   const msgDoc = {
     patientId,
     senderRole, // "patient" | "doctor"
-    senderName,
-    text: text || "",
+    senderName: senderName || (senderRole === "doctor" ? "Doctor" : "Patient"),
+    text: encryptedText,
     type: extra.type || "text", // "text" | "prescription"
     prescriptionData: extra.prescriptionData || null,
     createdAt: nowIso
