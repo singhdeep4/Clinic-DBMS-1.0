@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../lib/firebase";
 import { getPatientsByUid, getPatientWithVisits, linkFamilyMemberToUid, linkPatientByFamilyCode, getRotatingHash } from "../lib/patientService";
@@ -6,9 +6,12 @@ import { putItem } from "../lib/db";
 import { 
   User, Calendar, Shield, LogOut, FileText, ClipboardList, CheckCircle, 
   AlertCircle, Activity, Heart, Clock, Printer, MapPin, Phone, UserPlus, X, ChevronDown, Sparkles,
-  Mail
+  Mail, MessageCircle, Send
 } from "lucide-react";
 import SEO from "../components/SEO";
+import { 
+  subscribeToPatientChat, sendChatMessage, getPrescriptionHistory, markChatReadByPatient 
+} from "../lib/chatService";
 
 const clinics = [
   {
@@ -82,6 +85,50 @@ export default function PatientDashboard() {
   const [contactError, setContactError] = useState("");
   const [contactSuccess, setContactSuccess] = useState("");
   const [contactSubmitting, setContactSubmitting] = useState(false);
+
+  // Chat & Prescription History States
+  const [patientChatMessages, setPatientChatMessages] = useState([]);
+  const [patientChatInput, setPatientChatInput] = useState("");
+  const [prescriptionHistory, setPrescriptionHistory] = useState([]);
+  const [rxSearchTerm, setRxSearchTerm] = useState("");
+  const [rxLoading, setRxLoading] = useState(false);
+  const patientChatBottomRef = useRef(null);
+
+  // Subscribe to patient chat messages
+  useEffect(() => {
+    if (!patient?.patientId || activeTab !== "chat") return;
+    markChatReadByPatient(patient.patientId);
+    const unsub = subscribeToPatientChat(patient.patientId, (msgs) => {
+      setPatientChatMessages(msgs);
+    });
+    return () => unsub();
+  }, [patient?.patientId, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "chat" && patientChatBottomRef.current) {
+      patientChatBottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [patientChatMessages, activeTab]);
+
+  // Load prescription history
+  useEffect(() => {
+    if (activeTab !== "prescriptions") return;
+    async function loadRxHistory() {
+      setRxLoading(true);
+      try {
+        const ids = patientsList.map(p => p.patientId);
+        if (ids.length > 0) {
+          const list = await getPrescriptionHistory(ids);
+          setPrescriptionHistory(list);
+        }
+      } catch (err) {
+        console.error("Error loading prescription history:", err);
+      } finally {
+        setRxLoading(false);
+      }
+    }
+    loadRxHistory();
+  }, [activeTab, patientsList]);
 
   const loadAllLinkedPatients = async (uid, selectId = null) => {
     try {
@@ -606,6 +653,30 @@ export default function PatientDashboard() {
           >
             <Calendar size={16} />
             <span>Book Appointment</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("chat")}
+            className={`flex items-center gap-3 px-5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-left cursor-pointer relative ${
+              activeTab === "chat"
+                ? "bg-brand-primary text-brand-beige shadow-sm"
+                : "bg-white border border-brand-light/50 text-brand-primary hover:bg-brand-light/35"
+            }`}
+          >
+            <MessageCircle size={16} />
+            <span>Chat with Doctor</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("prescriptions")}
+            className={`flex items-center gap-3 px-5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-left cursor-pointer ${
+              activeTab === "prescriptions"
+                ? "bg-brand-primary text-brand-beige shadow-sm"
+                : "bg-white border border-brand-light/50 text-brand-primary hover:bg-brand-light/35"
+            }`}
+          >
+            <FileText size={16} />
+            <span>Prescription History</span>
           </button>
 
           <div className="mt-4 p-5 bg-brand-cream/40 border border-brand-light/45 rounded-2xl space-y-3 hidden lg:block">
@@ -1165,6 +1236,268 @@ export default function PatientDashboard() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: CHAT WITH DOCTOR */}
+          {activeTab === "chat" && (
+            <div className="bg-white border border-brand-light/50 rounded-3xl p-6 flex flex-col h-[calc(100vh-220px)] shadow-sm min-h-[500px]">
+              <div className="border-b border-brand-light/45 pb-3 shrink-0 flex justify-between items-center">
+                <div>
+                  <h2 className="font-serif text-xl font-bold text-brand-primary flex items-center gap-2">
+                    <MessageCircle size={22} className="text-emerald-700" /> Doctor Consultation Chat
+                  </h2>
+                  <p className="text-xs text-brand-dark/65 font-sans mt-0.5">
+                    Messaging as: <strong>{patient?.name}</strong> {patient?.relation ? `(${patient.relation})` : "(Primary Account)"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-emerald-800 font-bold bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Clinic Online</span>
+                </div>
+              </div>
+
+              {/* Notice Banner */}
+              <div className="bg-emerald-50/80 border border-emerald-200 text-emerald-900 rounded-xl p-2.5 my-3 text-xs flex items-center gap-2 shrink-0">
+                <span>ℹ️</span>
+                <span>Regular chat messages auto-delete after 15 days. Prescriptions are saved permanently in your <strong>Prescription History</strong> tab.</span>
+              </div>
+
+              {/* Message feed */}
+              <div className="flex-grow overflow-y-auto px-2 py-3 space-y-3 custom-scrollbar min-h-0">
+                {patientChatMessages.length === 0 ? (
+                  <div className="py-16 text-center space-y-2">
+                    <MessageCircle size={40} className="mx-auto text-brand-secondary/30" />
+                    <p className="text-xs text-brand-dark/50">No chat history yet. Send a message to contact your doctor.</p>
+                  </div>
+                ) : (
+                  patientChatMessages.map((msg) => {
+                    const isPatient = msg.senderRole === "patient";
+                    if (msg.type === "prescription" && msg.prescriptionData) {
+                      const rx = msg.prescriptionData;
+                      return (
+                        <div key={msg.id} className="my-4 mx-auto max-w-lg bg-gradient-to-br from-emerald-900 via-teal-900 to-emerald-950 text-white p-5 rounded-3xl shadow-lg border border-emerald-600 space-y-3">
+                          <div className="flex justify-between items-center border-b border-emerald-700/60 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="bg-emerald-500 text-white text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-md tracking-wider">
+                                ✓ Prescribed
+                              </span>
+                              <span className="font-serif font-bold text-sm text-emerald-100">Official Prescription</span>
+                            </div>
+                            <span className="text-[10px] text-emerald-300/70 font-mono">{rx.prescriptionId}</span>
+                          </div>
+                          {rx.diagnosis && (
+                            <div className="text-xs text-emerald-100">
+                              <span className="font-bold text-emerald-300">Diagnosis: </span>
+                              <span>{rx.diagnosis}</span>
+                            </div>
+                          )}
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 block">Prescribed Medications:</span>
+                            <div className="bg-emerald-950/70 rounded-xl p-3 space-y-2 border border-emerald-800/50">
+                              {rx.medicines && rx.medicines.map((m, idx) => (
+                                <div key={idx} className="text-xs border-b border-emerald-800/40 pb-2 last:border-0 last:pb-0">
+                                  <div className="font-bold text-white flex justify-between">
+                                    <span>{idx + 1}. {m.name}</span>
+                                    <span className="text-emerald-300 text-[11px]">{m.dose} • {m.frequency}</span>
+                                  </div>
+                                  <div className="text-[10px] text-emerald-200/80 flex flex-wrap gap-2 mt-0.5">
+                                    {m.kala && <span>Kala: {m.kala}</span>}
+                                    {m.anupana && <span>Anupana: {m.anupana}</span>}
+                                    {m.duration && <span className="font-semibold text-emerald-300">Duration: {m.duration}</span>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {rx.notes && <p className="text-xs italic text-emerald-200/80">"{rx.notes}"</p>}
+                          <div className="text-[10px] text-emerald-300/70 text-right pt-1">
+                            Issued by {rx.doctorName || "Doctor"} on {new Date(rx.createdAt).toLocaleDateString("en-IN")}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={msg.id} className={`flex flex-col ${isPatient ? "items-end" : "items-start"}`}>
+                        <div
+                          className={`max-w-[78%] p-3.5 rounded-2xl text-xs shadow-xs space-y-1 ${
+                            isPatient
+                              ? "bg-emerald-700 text-white rounded-br-none"
+                              : "bg-brand-beige text-brand-dark border border-brand-light/60 rounded-bl-none"
+                          }`}
+                        >
+                          <span className="text-[9px] font-bold block opacity-75">
+                            {isPatient ? "You" : (msg.senderName || "Doctor")}
+                          </span>
+                          <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                        </div>
+                        <span className="text-[9px] text-brand-dark/40 mt-1 px-1 font-medium">
+                          {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }) : ""}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={patientChatBottomRef} />
+              </div>
+
+              {/* Send message form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!patientChatInput.trim() || !patient?.patientId) return;
+                  sendChatMessage(
+                    patient.patientId,
+                    patient.name || "Patient",
+                    "patient",
+                    patient.name || "Patient",
+                    patientChatInput.trim()
+                  );
+                  setPatientChatInput("");
+                }}
+                className="flex items-center gap-2 pt-3 border-t border-brand-light/50 shrink-0"
+              >
+                <input
+                  type="text"
+                  placeholder={`Type message to doctor for ${patient?.name}...`}
+                  value={patientChatInput}
+                  onChange={(e) => setPatientChatInput(e.target.value)}
+                  className="flex-grow bg-brand-cream/10 border border-brand-light px-4 py-3 rounded-2xl text-xs focus:outline-none focus:border-brand-primary"
+                />
+                <button
+                  type="submit"
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                >
+                  <Send size={15} /> Send
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* TAB 6: PRESCRIPTION HISTORY */}
+          {activeTab === "prescriptions" && (
+            <div className="bg-white border border-brand-light/50 rounded-3xl p-6 md:p-8 space-y-6 shadow-sm">
+              <div className="border-b border-brand-light/45 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h2 className="font-serif text-xl font-bold text-brand-primary flex items-center gap-2">
+                    <FileText size={22} className="text-emerald-700" /> Prescriptions & Consultation History
+                  </h2>
+                  <p className="text-xs text-brand-dark/65 font-sans mt-1">
+                    Permanent records of all medications, diagnosis, and advice given by doctors.
+                  </p>
+                </div>
+
+                {/* Search Bar */}
+                <input
+                  type="text"
+                  placeholder="Search by diagnosis or medicine..."
+                  value={rxSearchTerm}
+                  onChange={(e) => setRxSearchTerm(e.target.value)}
+                  className="bg-brand-cream/10 border border-brand-light px-4 py-2 rounded-xl text-xs w-full md:w-64 focus:outline-none focus:border-brand-primary"
+                />
+              </div>
+
+              {rxLoading ? (
+                <div className="py-16 text-center text-xs text-brand-dark/50 animate-pulse">
+                  Loading prescription history...
+                </div>
+              ) : prescriptionHistory.length === 0 ? (
+                <div className="py-16 text-center text-xs text-brand-dark/50 bg-brand-cream/10 rounded-2xl border border-brand-light/30 space-y-2">
+                  <FileText size={36} className="mx-auto text-brand-secondary/30" />
+                  <p className="font-semibold text-brand-primary">No prescriptions recorded yet.</p>
+                  <p className="text-[11px] text-brand-dark/60">When your doctor prescribes medications during consultations or chat, they will appear here permanently.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {prescriptionHistory
+                    .filter(rx => {
+                      if (!rxSearchTerm.trim()) return true;
+                      const term = rxSearchTerm.toLowerCase();
+                      return (
+                        (rx.diagnosis || "").toLowerCase().includes(term) ||
+                        (rx.patientName || "").toLowerCase().includes(term) ||
+                        (rx.medicines || []).some(m => (m.name || "").toLowerCase().includes(term))
+                      );
+                    })
+                    .map((rx) => (
+                      <div key={rx.id} className="border border-brand-light/50 rounded-3xl overflow-hidden shadow-sm bg-brand-beige/20">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-emerald-900 to-teal-900 text-white p-4.5 flex justify-between items-center flex-wrap gap-2">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-300 block">
+                              Prescribed for: {rx.patientName}
+                            </span>
+                            <h4 className="font-serif font-bold text-base text-white">
+                              {rx.diagnosis ? `Diagnosis: ${rx.diagnosis}` : "General Consultation Rx"}
+                            </h4>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-emerald-200 block font-medium">
+                              {new Date(rx.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                            </span>
+                            <span className="text-[9px] font-mono text-emerald-300/80">{rx.prescriptionId}</span>
+                          </div>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-5 space-y-4 text-xs">
+                          {/* Medicines Table */}
+                          <div className="space-y-2">
+                            <span className="font-bold text-brand-primary uppercase tracking-wider text-[10px] block">
+                              💊 Advised Medications
+                            </span>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left border-collapse bg-white rounded-xl overflow-hidden border border-brand-light/40">
+                                <thead>
+                                  <tr className="bg-emerald-50 text-emerald-950 font-bold uppercase text-[10px] border-b border-emerald-200">
+                                    <th className="py-2.5 px-3">#</th>
+                                    <th className="py-2.5 px-3">Medicine Name</th>
+                                    <th className="py-2.5 px-3">Dose / Frequency</th>
+                                    <th className="py-2.5 px-3">Timing (Kala)</th>
+                                    <th className="py-2.5 px-3">Anupana</th>
+                                    <th className="py-2.5 px-3 text-right">Duration</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 text-gray-800">
+                                  {rx.medicines && rx.medicines.map((m, idx) => (
+                                    <tr key={idx} className="hover:bg-brand-beige/30">
+                                      <td className="py-2.5 px-3 font-semibold text-gray-400">{idx + 1}</td>
+                                      <td className="py-2.5 px-3 font-bold text-emerald-900">{m.name}</td>
+                                      <td className="py-2.5 px-3">{m.dose} • {m.frequency}</td>
+                                      <td className="py-2.5 px-3 font-medium">{m.kala || "—"}</td>
+                                      <td className="py-2.5 px-3 italic">{m.anupana || "—"}</td>
+                                      <td className="py-2.5 px-3 text-right font-bold text-emerald-900">{m.duration || "—"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+
+                          {/* Notes & Lifestyle */}
+                          {rx.notes && (
+                            <div className="bg-white p-3.5 rounded-xl border border-brand-light/35 space-y-1">
+                              <span className="font-bold text-brand-primary text-[10px] uppercase tracking-wider block">
+                                Diet & Lifestyle Instructions (Pathya-Apathya):
+                              </span>
+                              <p className="text-brand-dark/75 italic">"{rx.notes}"</p>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center pt-2 text-[10px] text-brand-dark/50 border-t border-brand-light/30">
+                            <span>Prescribed by: <strong>{rx.doctorName || "Doctor"}</strong></span>
+                            <button
+                              onClick={() => window.print()}
+                              className="flex items-center gap-1 text-brand-primary hover:text-brand-secondary font-bold uppercase tracking-wider cursor-pointer"
+                            >
+                              <Printer size={12} /> Print Prescription
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                 </div>
               )}
             </div>

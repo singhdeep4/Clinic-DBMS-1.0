@@ -4,12 +4,16 @@ import { useNavigate } from "react-router-dom";
 import { 
   User, Plus, Trash2, History,
   Search, Printer, Save, RefreshCw, LogOut, Check, PlusCircle, ArrowLeft, ArrowRight,
-  Database, BarChart3, Bell, Shield, Download, Upload, AlertTriangle, Calendar, MessageCircle, Menu, X, Settings, ChevronDown
+  Database, BarChart3, Bell, Shield, Download, Upload, AlertTriangle, Calendar, MessageCircle, Menu, X, Settings, ChevronDown, Send, FileText
 } from "lucide-react";
 import SEO from "../components/SEO";
 import { 
   getAllItems, putItem, deleteItem, clearStore, syncFromCloud
 } from "../lib/db";
+import { 
+  subscribeToAllChatRooms, subscribeToPatientChat, sendChatMessage, 
+  saveAndSendPrescription, markChatReadByDoctor 
+} from "../lib/chatService.js";
 
 // Helper to calculate duration from onset date
 const getDurationString = (dateStr) => {
@@ -279,6 +283,53 @@ export default function DbmsDashboard() {
   const [doctorName, setDoctorName] = useState(() => {
     return localStorage.getItem("ayurkaya_doctor_name") || "";
   });
+
+  // Chat and Prescription States
+  const [chatRooms, setChatRooms] = useState([]);
+  const [activeChatPatientId, setActiveChatPatientId] = useState("");
+  const [activeChatPatientName, setActiveChatPatientName] = useState("");
+  const [activeChatMessages, setActiveChatMessages] = useState([]);
+  const [doctorChatInput, setDoctorChatInput] = useState("");
+  const chatBottomRef = useRef(null);
+  
+  // Doctor Prescription Modal States
+  const [showPrescribeModal, setShowPrescribeModal] = useState(false);
+  const [prescribePatientId, setPrescribePatientId] = useState("");
+  const [prescribePatientName, setPrescribePatientName] = useState("");
+  const [prescribeDiagnosis, setPrescribeDiagnosis] = useState("");
+  const [prescribeMedicines, setPrescribeMedicines] = useState([
+    { name: "", dose: "1 Tablet", frequency: "Twice daily", kala: "After Food", anupana: "Warm Water", duration: "7 Days" }
+  ]);
+  const [prescribeNotes, setPrescribeNotes] = useState("");
+  const [prescribeSubmitting, setPrescribeSubmitting] = useState(false);
+
+  // Subscribe to all chat rooms for real-time list
+  useEffect(() => {
+    const unsub = subscribeToAllChatRooms((rooms) => {
+      setChatRooms(rooms);
+    });
+    return () => unsub();
+  }, []);
+
+  // Subscribe to selected patient's chat thread
+  useEffect(() => {
+    if (!activeChatPatientId) return;
+    markChatReadByDoctor(activeChatPatientId);
+    const unsub = subscribeToPatientChat(activeChatPatientId, (msgs) => {
+      setActiveChatMessages(msgs);
+    });
+    return () => unsub();
+  }, [activeChatPatientId]);
+
+  useEffect(() => {
+    if (chatBottomRef.current) {
+      chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [activeChatMessages]);
+
+  const unreadChatsCount = useMemo(() => {
+    return chatRooms.filter(r => r.hasUnreadDoctor).length;
+  }, [chatRooms]);
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -3022,6 +3073,22 @@ export default function DbmsDashboard() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => { setViewMode("online_patients"); closeSidebarOnMobile(); }}
+              className={`flex items-center gap-2.5 px-4.5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer relative ${
+                viewMode === "online_patients" 
+                  ? "bg-brand-primary text-brand-beige shadow-sm" 
+                  : "bg-brand-beige text-brand-primary hover:bg-brand-light/45"
+              }`}
+            >
+              <MessageCircle size={15} />
+              <span>Online Patients & Chat</span>
+              {unreadChatsCount > 0 && (
+                <span className="ml-auto bg-emerald-500 text-white text-[10px] px-2.5 py-0.5 rounded-full font-bold animate-pulse">
+                  {unreadChatsCount}
+                </span>
+              )}
+            </button>
             {/* Unified Settings Option */}
             <div className="col-span-2 lg:col-span-1">
               <button
@@ -3208,6 +3275,7 @@ export default function DbmsDashboard() {
               {viewMode === "settings" && settingsSubMode === "plan" && "Cloud Database Plan"}
               {viewMode === "settings" && settingsSubMode === "purge" && "Inactive Patient Profile Purge"}
               {viewMode === "recent_cases" && "All Recent Case Sheets"}
+              {viewMode === "online_patients" && "Online Patients & Real-time Consultation Chat"}
             </span>
           </div>
 
@@ -5919,9 +5987,481 @@ export default function DbmsDashboard() {
             );
           })()}
 
+          {/* ==================== VIEW 6: ONLINE PATIENTS & REALTIME CHAT ==================== */}
+          {viewMode === "online_patients" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-170px)] animate-fadeIn">
+              {/* Left Column: Chat Threads list */}
+              <div className="lg:col-span-4 bg-brand-cream border border-brand-light/60 rounded-3xl p-5 flex flex-col h-full shadow-sm min-h-0">
+                <div className="flex items-center justify-between border-b border-brand-light/50 pb-3 mb-3 shrink-0">
+                  <div>
+                    <h3 className="font-serif font-bold text-brand-primary text-base flex items-center gap-2">
+                      <MessageCircle size={18} /> Active Patient Chats
+                    </h3>
+                    <p className="text-[10px] text-brand-dark/50 font-medium">Real-time messaging & consultation history</p>
+                  </div>
+                  {unreadChatsCount > 0 && (
+                    <span className="bg-emerald-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full animate-pulse">
+                      {unreadChatsCount} New
+                    </span>
+                  )}
+                </div>
+
+                {/* Search / Select Patient for Chat */}
+                <div className="mb-3 shrink-0">
+                  <select
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      const p = savedCases.find(c => c.patientId === e.target.value) || dbPatients.find(dp => dp.patientId === e.target.value);
+                      if (p) {
+                        setActiveChatPatientId(p.patientId);
+                        setActiveChatPatientName(p.name || "Patient");
+                      }
+                    }}
+                    className="w-full bg-brand-beige border border-brand-light/60 px-3 py-2 rounded-xl text-xs font-medium focus:outline-none focus:border-brand-primary cursor-pointer"
+                    value=""
+                  >
+                    <option value="">+ Select Patient from Directory to Chat...</option>
+                    {savedCases.map(c => (
+                      <option key={c.patientId} value={c.patientId}>{c.name} ({c.patientId}) - 📞 {c.mobile}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Chat Rooms List */}
+                <div className="flex-grow overflow-y-auto pr-1 space-y-2 custom-scrollbar min-h-0">
+                  {chatRooms.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-brand-dark/45 space-y-2">
+                      <MessageCircle size={32} className="mx-auto text-brand-secondary/30" />
+                      <p>No active chat threads yet.</p>
+                      <p className="text-[10px] italic">Select a patient above to initiate a consultation chat.</p>
+                    </div>
+                  ) : (
+                    chatRooms.map((room) => {
+                      const isSelected = room.patientId === activeChatPatientId;
+                      const dateDisplay = room.updatedAt ? new Date(room.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+                      return (
+                        <div
+                          key={room.id}
+                          onClick={() => {
+                            setActiveChatPatientId(room.patientId);
+                            setActiveChatPatientName(room.patientName || "Patient");
+                          }}
+                          className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative ${
+                            isSelected
+                              ? "bg-brand-primary text-brand-beige border-brand-primary shadow-sm"
+                              : room.hasUnreadDoctor
+                              ? "bg-emerald-50/80 border-emerald-300 hover:bg-emerald-100/50"
+                              : "bg-brand-beige/60 border-brand-light/40 hover:bg-brand-beige"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="font-serif font-bold text-sm truncate max-w-[170px]">
+                              {room.patientName || room.patientId}
+                            </div>
+                            <span className={`text-[9px] ${isSelected ? "text-brand-beige/70" : "text-brand-dark/45"}`}>
+                              {dateDisplay}
+                            </span>
+                          </div>
+                          <p className={`text-xs mt-1 truncate ${isSelected ? "text-brand-beige/85" : "text-brand-dark/65"}`}>
+                            {room.lastMessage || "Chat initialized"}
+                          </p>
+                          {room.hasUnreadDoctor && !isSelected && (
+                            <span className="absolute top-3 right-3 h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" title="Unread patient message" />
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Live Chat & Prescribe Box */}
+              <div className="lg:col-span-8 bg-brand-cream border border-brand-light/60 rounded-3xl p-5 flex flex-col h-full shadow-sm min-h-0">
+                {!activeChatPatientId ? (
+                  <div className="m-auto text-center space-y-3 py-16">
+                    <MessageCircle size={48} className="mx-auto text-brand-primary/30" />
+                    <h3 className="font-serif font-bold text-lg text-brand-primary">Select a Patient to Chat</h3>
+                    <p className="text-xs text-brand-dark/60 max-w-sm mx-auto">
+                      Choose an active chat thread from the left or select a patient from the dropdown to start live messaging and prescribe medications.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Chat Header */}
+                    <div className="flex items-center justify-between border-b border-brand-light/50 pb-3 shrink-0">
+                      <div>
+                        <h3 className="font-serif font-bold text-brand-primary text-base">
+                          {activeChatPatientName}
+                        </h3>
+                        <span className="text-[10px] font-mono font-bold text-brand-secondary">
+                          ID: {activeChatPatientId}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setPrescribePatientId(activeChatPatientId);
+                            setPrescribePatientName(activeChatPatientName);
+                            setShowPrescribeModal(true);
+                          }}
+                          className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer"
+                        >
+                          <FileText size={15} /> Prescribe
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Banner notification about 15-day auto deletion */}
+                    <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl p-2.5 my-2 text-[11px] text-emerald-900 flex items-center gap-2 shrink-0">
+                      <span>ℹ️</span>
+                      <span>Regular text chat auto-deletes after 15 days. Prescriptions are saved permanently in database history.</span>
+                    </div>
+
+                    {/* Messages Area */}
+                    <div className="flex-grow overflow-y-auto py-3 px-2 space-y-3 custom-scrollbar min-h-0">
+                      {activeChatMessages.length === 0 ? (
+                        <div className="py-12 text-center text-xs text-brand-dark/40">
+                          No message history yet. Send a message below to start consulting.
+                        </div>
+                      ) : (
+                        activeChatMessages.map((msg) => {
+                          const isDoctor = msg.senderRole === "doctor";
+                          if (msg.type === "prescription" && msg.prescriptionData) {
+                            const rx = msg.prescriptionData;
+                            return (
+                              <div key={msg.id} className="my-3 mx-auto max-w-xl bg-gradient-to-br from-emerald-900 to-teal-900 text-white p-4.5 rounded-2xl shadow-md border border-emerald-700 space-y-3">
+                                <div className="flex justify-between items-center border-b border-emerald-700/60 pb-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="bg-emerald-500 text-white text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md tracking-wider">
+                                      ✓ Prescribed
+                                    </span>
+                                    <span className="font-serif font-bold text-sm text-emerald-100">Ayurvedic Prescription</span>
+                                  </div>
+                                  <span className="text-[10px] text-emerald-200/70 font-mono">
+                                    {rx.prescriptionId}
+                                  </span>
+                                </div>
+                                {rx.diagnosis && (
+                                  <div className="text-xs text-emerald-100">
+                                    <span className="font-bold text-emerald-300">Diagnosis: </span>
+                                    <span>{rx.diagnosis}</span>
+                                  </div>
+                                )}
+                                <div className="space-y-1.5">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 block">Prescribed Medicines:</span>
+                                  <div className="bg-emerald-950/60 rounded-xl p-2.5 space-y-2 border border-emerald-800/50">
+                                    {rx.medicines && rx.medicines.map((m, idx) => (
+                                      <div key={idx} className="text-xs border-b border-emerald-800/40 pb-1.5 last:border-0 last:pb-0">
+                                        <div className="font-bold text-white flex justify-between">
+                                          <span>{idx + 1}. {m.name}</span>
+                                          <span className="text-emerald-300 text-[11px]">{m.dose} • {m.frequency}</span>
+                                        </div>
+                                        <div className="text-[10px] text-emerald-200/80 flex flex-wrap gap-2 mt-0.5">
+                                          {m.kala && <span>Kala: {m.kala}</span>}
+                                          {m.anupana && <span>Anupana: {m.anupana}</span>}
+                                          {m.duration && <span className="font-semibold text-emerald-300">Duration: {m.duration}</span>}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                                {rx.notes && (
+                                  <p className="text-xs italic text-emerald-200/80">"{rx.notes}"</p>
+                                )}
+                                <div className="text-[9px] text-emerald-300/60 text-right pt-1">
+                                  Prescribed by {rx.doctorName || "Doctor"} on {new Date(rx.createdAt).toLocaleDateString("en-IN")}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={msg.id} className={`flex flex-col ${isDoctor ? "items-end" : "items-start"}`}>
+                              <div
+                                className={`max-w-[75%] p-3 rounded-2xl text-xs shadow-xs space-y-1 ${
+                                  isDoctor
+                                    ? "bg-brand-primary text-brand-beige rounded-br-none"
+                                    : "bg-white text-brand-dark border border-brand-light/60 rounded-bl-none"
+                                }`}
+                              >
+                                <span className="text-[9px] font-bold block opacity-70">
+                                  {isDoctor ? (msg.senderName || "Doctor") : (msg.senderName || "Patient")}
+                                </span>
+                                <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                              </div>
+                              <span className="text-[9px] text-brand-dark/40 mt-1 px-1 font-medium">
+                                {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }) : ""}
+                              </span>
+                            </div>
+                          );
+                        })
+                      )}
+                      <div ref={chatBottomRef} />
+                    </div>
+
+                    {/* Chat Input Bar */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!doctorChatInput.trim()) return;
+                        sendChatMessage(
+                          activeChatPatientId,
+                          activeChatPatientName,
+                          "doctor",
+                          getFormattedDocName(),
+                          doctorChatInput.trim()
+                        );
+                        setDoctorChatInput("");
+                      }}
+                      className="flex items-center gap-2 pt-3 border-t border-brand-light/50 shrink-0"
+                    >
+                      <input
+                        type="text"
+                        placeholder="Type message to patient..."
+                        value={doctorChatInput}
+                        onChange={(e) => setDoctorChatInput(e.target.value)}
+                        className="flex-grow bg-brand-beige border border-brand-light/60 px-4 py-2.5 rounded-xl text-xs focus:outline-none focus:border-brand-primary"
+                      />
+                      <button
+                        type="submit"
+                        className="bg-brand-primary hover:bg-brand-secondary text-brand-beige px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                      >
+                        <Send size={14} /> Send
+                      </button>
+                    </form>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
         </div>
 
       </div>
+
+      {/* Doctor Prescription Modal Overlay */}
+      {showPrescribeModal && (
+        <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-brand-cream border border-brand-light rounded-3xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar animate-scaleUp">
+            <div className="flex justify-between items-center border-b border-brand-light/50 pb-3">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-emerald-950 flex items-center gap-2">
+                  <FileText size={20} className="text-emerald-700" /> Prescribe Medication
+                </h3>
+                <p className="text-xs text-brand-dark/60 font-medium">
+                  Patient: <strong>{prescribePatientName}</strong> (ID: {prescribePatientId})
+                </p>
+              </div>
+              <button
+                onClick={() => setShowPrescribeModal(false)}
+                className="p-1.5 text-brand-dark/50 hover:text-brand-primary rounded-xl cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* Diagnosis */}
+              <div>
+                <label className="block font-bold text-brand-primary uppercase tracking-wider mb-1 text-[10px]">
+                  Clinical Diagnosis / Consultation Summary
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Amavata (Rheumatoid Arthritis), Agnimandya"
+                  value={prescribeDiagnosis}
+                  onChange={(e) => setPrescribeDiagnosis(e.target.value)}
+                  className="w-full bg-brand-beige border border-brand-light px-3.5 py-2.5 rounded-xl focus:outline-none focus:border-brand-primary"
+                />
+              </div>
+
+              {/* Medicines list builder */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="block font-bold text-brand-primary uppercase tracking-wider text-[10px]">
+                    Advised Medicines (Rx)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrescribeMedicines([
+                        ...prescribeMedicines,
+                        { name: "", dose: "1 Tablet", frequency: "Twice daily", kala: "After Food", anupana: "Warm Water", duration: "7 Days" }
+                      ]);
+                    }}
+                    className="text-[10px] font-bold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={12} /> Add Medicine Row
+                  </button>
+                </div>
+
+                {/* Preset Buttons */}
+                <div className="flex flex-wrap gap-1.5 py-1">
+                  <span className="text-[9px] font-bold text-brand-dark/50 uppercase self-center mr-1">Quick Presets:</span>
+                  {MEDICINE_PRESETS.slice(0, 6).map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        setPrescribeMedicines([
+                          ...prescribeMedicines,
+                          { name: preset, dose: "1 Tablet", frequency: "Twice daily", kala: "After Food", anupana: "Warm Water", duration: "7 Days" }
+                        ]);
+                      }}
+                      className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-900 text-[10px] px-2 py-0.5 rounded-lg font-medium cursor-pointer"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="space-y-3">
+                  {prescribeMedicines.map((med, idx) => (
+                    <div key={idx} className="bg-brand-beige p-3 rounded-2xl border border-brand-light/60 space-y-2 relative">
+                      <div className="flex gap-2 items-center">
+                        <span className="font-bold text-emerald-900 text-xs">{idx + 1}.</span>
+                        <input
+                          type="text"
+                          placeholder="Medicine Name (e.g. Triphala Churna)"
+                          value={med.name}
+                          onChange={(e) => {
+                            const copy = [...prescribeMedicines];
+                            copy[idx].name = e.target.value;
+                            setPrescribeMedicines(copy);
+                          }}
+                          className="flex-grow bg-white border border-brand-light px-3 py-1.5 rounded-xl font-bold text-emerald-950 focus:outline-none focus:border-brand-primary"
+                        />
+                        {prescribeMedicines.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setPrescribeMedicines(prescribeMedicines.filter((_, i) => i !== idx))}
+                            className="p-1 text-red-500 hover:text-red-700 cursor-pointer"
+                            title="Remove medicine"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div>
+                          <span className="text-[9px] text-brand-dark/60 font-bold block">Dose / Freq</span>
+                          <input
+                            type="text"
+                            placeholder="1 Tab / Twice daily"
+                            value={med.dose}
+                            onChange={(e) => {
+                              const copy = [...prescribeMedicines];
+                              copy[idx].dose = e.target.value;
+                              setPrescribeMedicines(copy);
+                            }}
+                            className="w-full bg-white border border-brand-light px-2 py-1 rounded-lg text-[11px]"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-brand-dark/60 font-bold block">Kala (Timing)</span>
+                          <input
+                            type="text"
+                            placeholder="After Food / Before Food"
+                            value={med.kala}
+                            onChange={(e) => {
+                              const copy = [...prescribeMedicines];
+                              copy[idx].kala = e.target.value;
+                              setPrescribeMedicines(copy);
+                            }}
+                            className="w-full bg-white border border-brand-light px-2 py-1 rounded-lg text-[11px]"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-brand-dark/60 font-bold block">Anupana</span>
+                          <input
+                            type="text"
+                            placeholder="Warm Water / Milk"
+                            value={med.anupana}
+                            onChange={(e) => {
+                              const copy = [...prescribeMedicines];
+                              copy[idx].anupana = e.target.value;
+                              setPrescribeMedicines(copy);
+                            }}
+                            className="w-full bg-white border border-brand-light px-2 py-1 rounded-lg text-[11px]"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-brand-dark/60 font-bold block">Duration</span>
+                          <input
+                            type="text"
+                            placeholder="7 Days / 15 Days"
+                            value={med.duration}
+                            onChange={(e) => {
+                              const copy = [...prescribeMedicines];
+                              copy[idx].duration = e.target.value;
+                              setPrescribeMedicines(copy);
+                            }}
+                            className="w-full bg-white border border-brand-light px-2 py-1 rounded-lg text-[11px]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Doctor Notes & Lifestyle Advice */}
+              <div>
+                <label className="block font-bold text-brand-primary uppercase tracking-wider mb-1 text-[10px]">
+                  Diet, Lifestyle (Pathya-Apathya) & Instructions
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Avoid cold drinks, sour foods. Take light warm meals."
+                  value={prescribeNotes}
+                  onChange={(e) => setPrescribeNotes(e.target.value)}
+                  className="w-full bg-brand-beige border border-brand-light px-3.5 py-2 rounded-xl focus:outline-none focus:border-brand-primary"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-3 border-t border-brand-light/50">
+              <button
+                type="button"
+                onClick={() => setShowPrescribeModal(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-brand-primary bg-brand-light/20 hover:bg-brand-light/35 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={prescribeSubmitting}
+                onClick={async () => {
+                  setPrescribeSubmitting(true);
+                  try {
+                    await saveAndSendPrescription(
+                      prescribePatientId,
+                      prescribePatientName,
+                      getFormattedDocName(),
+                      {
+                        diagnosis: prescribeDiagnosis,
+                        medicines: prescribeMedicines.filter(m => m.name.trim() !== ""),
+                        notes: prescribeNotes
+                      }
+                    );
+                    setShowPrescribeModal(false);
+                    setPrescribeDiagnosis("");
+                    setPrescribeNotes("");
+                    setPrescribeMedicines([{ name: "", dose: "1 Tablet", frequency: "Twice daily", kala: "After Food", anupana: "Warm Water", duration: "7 Days" }]);
+                    triggerNotification(`Prescription sent to ${prescribePatientName} and saved in database!`);
+                  } catch (err) {
+                    console.error("Prescription error:", err);
+                  } finally {
+                    setPrescribeSubmitting(false);
+                  }
+                }}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-emerald-700 hover:bg-emerald-800 transition-colors shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <Check size={16} /> Save & Send Prescription
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Action Buttons for iPad / Touch Convenience */}
       {viewMode === "clinical" && (
