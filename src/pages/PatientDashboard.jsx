@@ -6,7 +6,7 @@ import { getAllItems, putItem } from "../lib/db";
 import { 
   User, Calendar, Shield, LogOut, FileText, ClipboardList, CheckCircle, 
   AlertCircle, Activity, Heart, Clock, Printer, MapPin, Phone, UserPlus, X, ChevronDown, Sparkles,
-  Mail, MessageCircle, Send, ArrowLeft, UserX, Trash2
+  Mail, MessageCircle, Send, ArrowLeft, UserX, Trash2, Users
 } from "lucide-react";
 import SEO from "../components/SEO";
 import { 
@@ -89,6 +89,13 @@ export default function PatientDashboard() {
   // Unlink Family Member Modal States
   const [unlinkTarget, setUnlinkTarget] = useState(null);
   const [unlinking, setUnlinking] = useState(false);
+
+  // Toast Notification State
+  const [notification, setNotification] = useState("");
+  const triggerNotification = (msg) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(""), 4000);
+  };
 
   const handleConfirmUnlink = async () => {
     if (!unlinkTarget?.patientId) return;
@@ -1823,6 +1830,14 @@ export default function PatientDashboard() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast Notification Banner */}
+      {notification && (
+        <div className="fixed bottom-6 right-6 z-[100] bg-brand-primary text-brand-beige px-5 py-3 rounded-2xl shadow-2xl border border-brand-light/30 text-xs font-bold flex items-center gap-2.5 animate-slideUp">
+          <Sparkles size={16} className="text-amber-300 shrink-0" />
+          <span>{notification}</span>
         </div>
       )}
     </div>
