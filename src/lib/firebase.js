@@ -16,9 +16,6 @@ const firebaseConfig = {
 // Initialize Firebase Client
 const app = initializeApp(firebaseConfig);
 
-// DEBUG: Log the API key the app is using (remove after debugging)
-console.log("FIREBASE_API_KEY:", firebaseConfig.apiKey);
-
 // Export Services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
