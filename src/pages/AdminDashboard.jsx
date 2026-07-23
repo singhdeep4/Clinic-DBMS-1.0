@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../lib/firebase";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { getAllItems, putItem, deleteItem } from "../lib/db";
 import { 
   User, Shield, LogOut, CheckCircle, AlertCircle, Trash2, Search, 
-  UserPlus, Mail, Plus, Activity, Calendar, Phone, Sparkles, Edit, Key
+  UserPlus, Mail, Plus, Activity, Calendar, Phone, Sparkles, Edit, Key, Users, UserX
 } from "lucide-react";
 import SEO from "../components/SEO";
+import { unlinkFamilyMember, generateDoctorFamilyCode } from "../lib/patientService.js";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("doctors"); // "doctors" | "patients"
+  const [activeTab, setActiveTab] = useState("doctors"); // "doctors" | "patients" | "family_registry"
   const [loading, setLoading] = useState(true);
 
   // Lists
@@ -20,6 +21,7 @@ export default function AdminDashboard() {
 
   // Search/Filters
   const [patientSearch, setPatientSearch] = useState("");
+  const [familySearch, setFamilySearch] = useState("");
 
   // Doctor Form States
   const [docEmail, setDocEmail] = useState("");
@@ -290,6 +292,48 @@ export default function AdminDashboard() {
     );
   });
 
+  const familyGroups = useMemo(() => {
+    const query = familySearch.toLowerCase().trim();
+    
+    // Find matching patients by name, mobile, patientId, or familyCode
+    const matched = patients.filter((p) => {
+      if (!query) return true;
+      return (
+        (p.name && p.name.toLowerCase().includes(query)) ||
+        (p.mobile && p.mobile.includes(query)) ||
+        (p.patientId && p.patientId.toLowerCase().includes(query)) ||
+        (p.familyCode && p.familyCode.toLowerCase().includes(query)) ||
+        (p.familyId && p.familyId.toLowerCase().includes(query))
+      );
+    });
+
+    // Extract all matching family IDs
+    const matchedFamilyIds = new Set(
+      matched.map(p => p.familyId || ("FAMID-" + (p.patientId ? p.patientId.replace("PAT-", "") : Math.random())))
+    );
+
+    // Group all patients belonging to matched family IDs
+    const groupsMap = {};
+    patients.forEach((p) => {
+      const fId = p.familyId || ("FAMID-" + (p.patientId ? p.patientId.replace("PAT-", "") : "UNK"));
+      if (matchedFamilyIds.has(fId) || !query) {
+        if (!groupsMap[fId]) groupsMap[fId] = [];
+        groupsMap[fId].push(p);
+      }
+    });
+
+    return Object.entries(groupsMap).map(([fId, members]) => {
+      const head = members.find(m => m.isPrimary || m.relation === "Self") || members[0];
+      const familyCode = members.find(m => m.familyCode)?.familyCode || head?.familyCode || "";
+      return {
+        familyId: fId,
+        familyCode,
+        head,
+        members
+      };
+    });
+  }, [patients, familySearch]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-brand-beige">
@@ -365,6 +409,18 @@ export default function AdminDashboard() {
           >
             <User size={16} />
             <span>Patient Accounts</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("family_registry")}
+            className={`flex items-center gap-3 px-5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-left cursor-pointer ${
+              activeTab === "family_registry"
+                ? "bg-brand-primary text-brand-beige shadow-sm"
+                : "bg-white border border-brand-light/50 text-brand-primary hover:bg-brand-light/35"
+            }`}
+          >
+            <Users size={16} />
+            <span>Family Registry Log</span>
           </button>
 
           <div className="mt-4 p-5 bg-brand-cream/40 border border-brand-light/45 rounded-2xl space-y-3 hidden lg:block">
@@ -701,6 +757,158 @@ export default function AdminDashboard() {
                           >
                             <Trash2 size={15} />
                           </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ==================== TAB 3: FAMILY REGISTRY & PARADE SEARCH ==================== */}
+          {activeTab === "family_registry" && (
+            <div className="space-y-6">
+              <div className="bg-white border border-brand-light/50 p-6 rounded-3xl space-y-6 shadow-sm">
+                
+                {/* Search Bar Header */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-brand-light/30 pb-4">
+                  <div>
+                    <h2 className="font-serif text-xl font-bold text-brand-primary flex items-center gap-2">
+                      <Users size={22} className="text-brand-secondary" /> Family Registry & Parade Search
+                    </h2>
+                    <p className="text-xs text-brand-dark/60 mt-1 font-sans">
+                      Search any family member by Name, Phone Number, Patient ID, or Family Code to view the complete family group.
+                    </p>
+                  </div>
+
+                  {/* Parade Search Box */}
+                  <div className="relative w-full md:w-80">
+                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary" />
+                    <input
+                      type="text"
+                      placeholder="Search name, phone, PAT-ID, or code..."
+                      value={familySearch}
+                      onChange={(e) => setFamilySearch(e.target.value)}
+                      className="w-full bg-brand-cream/15 border border-brand-light/60 pl-11 pr-4 py-2.5 rounded-xl text-xs text-brand-primary font-medium focus:ring-2 focus:ring-brand-primary outline-none shadow-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Family Groups List */}
+                {familyGroups.length === 0 ? (
+                  <div className="text-center py-12 bg-brand-cream/10 rounded-2xl border border-dashed border-brand-light/50">
+                    <Users size={32} className="mx-auto text-brand-secondary/40 mb-2" />
+                    <p className="text-sm font-semibold text-brand-primary">No Family Records Found</p>
+                    <p className="text-xs text-brand-dark/50 mt-1">Try searching by a member's name, phone number, or patient ID.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6 max-h-[600px] overflow-y-auto pr-1">
+                    {familyGroups.map((group) => (
+                      <div key={group.familyId} className="bg-brand-cream/30 border border-brand-light/60 rounded-2xl p-5 space-y-4 shadow-xs">
+                        
+                        {/* Family Header Banner */}
+                        <div className="flex flex-wrap justify-between items-center bg-brand-primary text-brand-beige px-4 py-3 rounded-xl gap-2">
+                          <div className="flex items-center gap-2">
+                            <Users size={16} className="text-brand-light" />
+                            <span className="font-serif font-bold text-sm">
+                              Family Head: {group.head?.name || "Unknown"}
+                            </span>
+                            <span className="text-[10px] bg-white/20 text-brand-beige px-2 py-0.5 rounded font-mono font-bold">
+                              ID: {group.familyId}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {group.familyCode ? (
+                              <span className="text-xs font-mono font-bold bg-emerald-800 text-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-600/50 flex items-center gap-1">
+                                Code: {group.familyCode}
+                              </span>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  if (!group.head?.patientId) return;
+                                  try {
+                                    const res = await generateDoctorFamilyCode(group.head.patientId);
+                                    await loadData();
+                                    alert(`Generated Family Code: ${res.familyCode}`);
+                                  } catch (err) {
+                                    alert("Failed to generate code: " + err.message);
+                                  }
+                                }}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-lg transition-colors cursor-pointer"
+                              >
+                                Generate Code
+                              </button>
+                            )}
+                            <span className="text-[10px] font-bold uppercase bg-white/10 px-2 py-1 rounded">
+                              {group.members.length} Member{group.members.length > 1 ? "s" : ""}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Members Table */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-brand-light/30 text-brand-primary font-bold uppercase text-[10px]">
+                              <tr>
+                                <th className="p-2.5 rounded-l-lg">Patient Name</th>
+                                <th className="p-2.5">Relation</th>
+                                <th className="p-2.5">Patient ID</th>
+                                <th className="p-2.5">Mobile</th>
+                                <th className="p-2.5 text-right rounded-r-lg">Admin Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-brand-light/30">
+                              {group.members.map((m) => (
+                                <tr key={m.patientId || m.id} className="hover:bg-brand-light/20 transition-colors">
+                                  <td className="p-2.5 font-bold text-brand-primary flex items-center gap-2">
+                                    <User size={14} className="text-brand-secondary shrink-0" />
+                                    <span>{m.name}</span>
+                                    {m.isPrimary && (
+                                      <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase">
+                                        Primary
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-2.5 text-brand-dark/80 font-medium">
+                                    {m.relation || "Self"}
+                                  </td>
+                                  <td className="p-2.5 font-mono text-brand-primary font-semibold">
+                                    {m.patientId}
+                                  </td>
+                                  <td className="p-2.5 text-brand-dark/80 font-mono">
+                                    {m.mobile || "N/A"}
+                                  </td>
+                                  <td className="p-2.5 text-right">
+                                    {!m.isPrimary && m.relation !== "Self" ? (
+                                      <button
+                                        onClick={async () => {
+                                          if (window.confirm(`Are you sure you want to remove ${m.name} from family group (${group.familyId})? All past medical records and prescriptions will remain 100% intact.`)) {
+                                            try {
+                                              await unlinkFamilyMember(m.patientId);
+                                              await loadData();
+                                              alert(`Successfully removed ${m.name} from family group.`);
+                                            } catch (err) {
+                                              alert("Failed to remove member: " + err.message);
+                                            }
+                                          }
+                                        }}
+                                        className="inline-flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                                        title="Separate member into an independent family profile"
+                                      >
+                                        <UserX size={12} /> Remove from Family
+                                      </button>
+                                    ) : (
+                                      <span className="text-[10px] text-brand-dark/40 italic">
+                                        Account Owner
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
                     ))}

@@ -667,27 +667,6 @@ export default function PatientDashboard() {
                                 {p.relation || "Self"}
                               </span>
                             </button>
-                            {(() => {
-                              const primaryOwnerDoc = patientsList.find(item => item.uid === auth.currentUser?.uid || item.isPrimary || item.relation === "Self");
-                              const isTargetDependent = p.patientId !== primaryOwnerDoc?.patientId && !p.isPrimary && p.relation !== "Self";
-                              
-                              if (isTargetDependent) {
-                                return (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setUnlinkTarget(p);
-                                      setIsSwitcherOpen(false);
-                                    }}
-                                    className="ml-2 text-red-600 hover:bg-red-100 p-1.5 rounded-lg transition-colors cursor-pointer"
-                                    title={`Separate ${p.name} from Family Group`}
-                                  >
-                                    <UserX size={14} />
-                                  </button>
-                                );
-                              }
-                              return null;
-                            })()}
                           </div>
                         ))}
                       </div>
