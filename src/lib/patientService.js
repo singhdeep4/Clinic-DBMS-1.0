@@ -350,3 +350,36 @@ export async function unlinkFamilyMember(memberPatientId) {
     throw err;
   }
 }
+
+// Doctor action: Generate a Family Link Code for a patient profile
+export async function generateDoctorFamilyCode(patientId) {
+  if (!patientId) throw new Error("Patient ID is required to generate family code.");
+  try {
+    const patientRef = doc(fdb, "patients", patientId);
+    const snap = await getDoc(patientRef);
+    if (!snap.exists()) {
+      throw new Error("Patient record not found in database.");
+    }
+
+    const patientData = snap.data();
+    let currentFamilyId = patientData.familyId;
+    if (!currentFamilyId) {
+      currentFamilyId = "FAMID-" + patientId.replace("PAT-", "");
+    }
+
+    const patientNum = patientId.replace("PAT-", "");
+    const rotHash = getRotatingHash(patientId);
+    const code = `FAM-${patientNum}-${rotHash}`;
+
+    await updateDoc(patientRef, {
+      familyId: currentFamilyId,
+      familyCode: code,
+      familyCodeGeneratedAt: new Date().toISOString()
+    });
+
+    return { familyId: currentFamilyId, familyCode: code };
+  } catch (err) {
+    console.error("Error generating doctor family code:", err);
+    throw err;
+  }
+}

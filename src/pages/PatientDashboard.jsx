@@ -714,7 +714,7 @@ export default function PatientDashboard() {
               onClick={() => setShowAddModal(true)}
               className="flex items-center gap-1.5 bg-brand-cream/15 hover:bg-brand-cream/25 border border-brand-cream/20 text-brand-beige px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
             >
-              <UserPlus size={14} /> Add Family Member
+              <Users size={14} /> Link Family Member
             </button>
             <button
               onClick={handleLogout}
@@ -1489,16 +1489,15 @@ export default function PatientDashboard() {
         </div>
       </div>
 
-      {/* ─── ADD FAMILY MEMBER MODAL ─── */}
+      {/* ─── LINK FAMILY MEMBER VIA CODE MODAL ─── */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="bg-brand-cream border border-brand-light/75 w-full max-w-md rounded-3xl p-6 md:p-8 space-y-4 shadow-2xl relative">
+          <div className="bg-brand-cream border border-brand-light/75 w-full max-w-md rounded-3xl p-6 md:p-8 space-y-4 shadow-2xl relative animate-scaleUp">
             <button
               onClick={() => {
                 setShowAddModal(false);
                 setModalError("");
                 setModalSuccess("");
-                setModalTab("register");
                 setModalLinkCode("");
               }}
               className="absolute right-4 top-4 p-1.5 hover:bg-brand-light/35 rounded-lg text-brand-primary transition-colors cursor-pointer"
@@ -1507,44 +1506,12 @@ export default function PatientDashboard() {
             </button>
 
             <div className="text-center">
-              <h3 className="font-serif text-xl font-bold text-brand-primary">Family Settings</h3>
+              <h3 className="font-serif text-xl font-bold text-brand-primary flex items-center justify-center gap-2">
+                <Users size={22} className="text-brand-secondary" /> Family Group Link
+              </h3>
               <p className="text-xs text-brand-dark/65 mt-1 font-sans">
-                Register new family members or link existing profiles using their link codes.
+                Enter a Family Link Code to join an existing family group, or view your family code.
               </p>
-            </div>
-
-            {/* Tabs Switcher */}
-            <div className="flex bg-brand-beige p-1 rounded-xl border border-brand-light/35 gap-1 my-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setModalTab("register");
-                  setModalError("");
-                  setModalSuccess("");
-                }}
-                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
-                  modalTab === "register"
-                    ? "bg-brand-primary text-brand-beige shadow-sm"
-                    : "text-brand-primary hover:bg-brand-light/30"
-                }`}
-              >
-                Register New
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setModalTab("linkcode");
-                  setModalError("");
-                  setModalSuccess("");
-                }}
-                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
-                  modalTab === "linkcode"
-                    ? "bg-brand-primary text-brand-beige shadow-sm"
-                    : "text-brand-primary hover:bg-brand-light/30"
-                }`}
-              >
-                Link by Code
-              </button>
             </div>
 
             {modalError && (
@@ -1560,129 +1527,95 @@ export default function PatientDashboard() {
               </div>
             )}
 
-            {modalTab === "register" ? (
-              <form onSubmit={handleAddFamilyMember} className="space-y-4 pt-1">
-                <div>
-                  <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Dependents Full Name</label>
-                  <div className="relative">
-                    <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
-                    <input
-                      type="text"
-                      value={modalName}
-                      onChange={(e) => setModalName(e.target.value)}
-                      placeholder="Son's/Wife's Name"
-                      className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
-                      required
-                    />
-                  </div>
+            {/* Enter Family Link Code Form */}
+            <form onSubmit={handleLinkByCode} className="space-y-4 pt-1">
+              <div>
+                <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">
+                  Paste Family Link Code (From Doctor / Family Member)
+                </label>
+                <div className="relative">
+                  <Shield size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
+                  <input
+                    type="text"
+                    value={modalLinkCode}
+                    onChange={(e) => setModalLinkCode(e.target.value)}
+                    placeholder="e.g. FAM-00000002-A4B9"
+                    className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary uppercase font-mono font-bold tracking-wider"
+                    required
+                  />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Registered Mobile (e.g. Parent's Mobile)</label>
-                  <div className="relative">
-                    <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
-                    <input
-                      type="tel"
-                      value={modalMobile}
-                      onChange={(e) => setModalMobile(e.target.value)}
-                      placeholder="Enter phone number"
-                      className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
-                      required
-                    />
-                  </div>
-                </div>
+              <div>
+                <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Relation</label>
+                <select
+                  value={modalRelation}
+                  onChange={(e) => setModalRelation(e.target.value)}
+                  className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+                >
+                  <option value="Child">Child</option>
+                  <option value="Spouse">Spouse</option>
+                  <option value="Parent">Parent</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Date of Birth</label>
-                    <div className="relative">
-                      <Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
-                      <input
-                        type="date"
-                        value={modalDob}
-                        onChange={(e) => setModalDob(e.target.value)}
-                        className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
-                        required
-                      />
-                    </div>
-                  </div>
+              <button
+                type="submit"
+                disabled={modalSubmitting}
+                className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md mt-2 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {modalSubmitting ? "Joining Family..." : "Join / Link Family Profile"}
+              </button>
+            </form>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Relation</label>
-                    <select
-                      value={modalRelation}
-                      onChange={(e) => setModalRelation(e.target.value)}
-                      className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+            {/* Doctor Code Request & Family Code Display */}
+            <div className="border-t border-brand-light/50 pt-4 text-xs space-y-3">
+              {patient?.familyCode ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-900 block">
+                    Your Active Family Link Code:
+                  </span>
+                  <div className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-emerald-300">
+                    <span className="font-mono font-extrabold text-sm text-emerald-950 tracking-wider">
+                      {patient.familyCode}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(patient.familyCode);
+                        triggerNotification("Family Code copied to clipboard!");
+                      }}
+                      className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider cursor-pointer"
                     >
-                      <option value="Child">Child</option>
-                      <option value="Spouse">Spouse</option>
-                      <option value="Parent">Parent</option>
-                      <option value="Other">Other</option>
-                    </select>
+                      Copy Code
+                    </button>
                   </div>
+                  <p className="text-[10px] text-emerald-800/80">
+                    Share this code with your family members so they can enter it on their portal to join your family account.
+                  </p>
                 </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Gender</label>
-                  <select
-                    value={modalGender}
-                    onChange={(e) => setModalGender(e.target.value)}
-                    className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
+              ) : (
+                <div className="bg-brand-beige/60 border border-brand-light/60 rounded-2xl p-3.5 space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-secondary block">
+                    Need a Family Link Code?
+                  </span>
+                  <p className="text-[11px] text-brand-dark/70">
+                    Ask your doctor during your consultation or send a message in chat to generate a Family Link Code for your account.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setShowChatModal(true);
+                    }}
+                    className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
                   >
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
+                    <MessageCircle size={13} /> Message Doctor to Request Code
+                  </button>
                 </div>
-
-                <button
-                  type="submit"
-                  disabled={modalSubmitting}
-                  className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md mt-2 cursor-pointer disabled:opacity-50"
-                >
-                  {modalSubmitting ? "Processing..." : "Add Family Member"}
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleLinkByCode} className="space-y-4 pt-1 animate-fadeIn">
-                <div>
-                  <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Enter Family Link Code</label>
-                  <div className="relative">
-                    <Shield size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary/70" />
-                    <input
-                      type="text"
-                      value={modalLinkCode}
-                      onChange={(e) => setModalLinkCode(e.target.value)}
-                      placeholder="e.g. FAM-X8D2J5"
-                      className="w-full bg-brand-beige border border-brand-light/50 pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary uppercase"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-brand-primary uppercase tracking-wider mb-2">Relation</label>
-                  <select
-                    value={modalRelation}
-                    onChange={(e) => setModalRelation(e.target.value)}
-                    className="w-full bg-brand-beige border border-brand-light/50 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-brand-secondary"
-                  >
-                    <option value="Child">Child</option>
-                    <option value="Spouse">Spouse</option>
-                    <option value="Parent">Parent</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={modalSubmitting}
-                  className="w-full bg-brand-primary text-brand-beige hover:bg-brand-secondary py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md mt-2 cursor-pointer disabled:opacity-50"
-                >
-                  {modalSubmitting ? "Linking..." : "Link Profile"}
-                </button>
-              </form>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}

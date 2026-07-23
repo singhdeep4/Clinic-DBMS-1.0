@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { 
   User, Plus, Trash2, History,
   Search, Printer, Save, RefreshCw, LogOut, Check, PlusCircle, ArrowLeft, ArrowRight,
-  Database, BarChart3, Bell, Shield, Download, Upload, AlertTriangle, Calendar, MessageCircle, Menu, X, Settings, ChevronDown, Send, FileText
+  Database, BarChart3, Bell, Shield, Download, Upload, AlertTriangle, Calendar, MessageCircle, Menu, X, Settings, ChevronDown, Send, FileText, Users
 } from "lucide-react";
 import SEO from "../components/SEO";
 import { 
@@ -14,6 +14,7 @@ import {
   subscribeToAllChatRooms, subscribeToPatientChat, sendChatMessage, 
   saveAndSendPrescription, markChatReadByDoctor 
 } from "../lib/chatService.js";
+import { generateDoctorFamilyCode } from "../lib/patientService.js";
 
 // Helper to calculate duration from onset date
 const getDurationString = (dateStr) => {
@@ -3385,16 +3386,54 @@ export default function DbmsDashboard() {
                       <h3 className="font-serif text-xl font-bold text-brand-primary">
                         1. Patient Demographic Profile
                       </h3>
-                      {currentCase.mobile && currentCase.mobile.replace(/[^0-9]/g, "").length === 10 && (
-                        <button
-                          onClick={updateRegistryProfile}
-                          className="flex items-center gap-1.5 bg-brand-secondary text-brand-beige hover:bg-brand-primary px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
-                          title="Save details permanently"
-                        >
-                          <Save size={13} /> Update Registry Card
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {currentCase.patientId && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await generateDoctorFamilyCode(currentCase.patientId);
+                                handleTextChange("familyCode", res.familyCode);
+                                handleTextChange("familyId", res.familyId);
+                                triggerNotification(`Family Code Generated: ${res.familyCode}`);
+                              } catch (err) {
+                                triggerNotification("Failed to generate family code: " + err.message);
+                              }
+                            }}
+                            className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
+                            title="Generate a Family Link Code for this patient"
+                          >
+                            <Users size={13} /> Generate Family Code
+                          </button>
+                        )}
+                        {currentCase.mobile && currentCase.mobile.replace(/[^0-9]/g, "").length === 10 && (
+                          <button
+                            onClick={updateRegistryProfile}
+                            className="flex items-center gap-1.5 bg-brand-secondary text-brand-beige hover:bg-brand-primary px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
+                            title="Save details permanently"
+                          >
+                            <Save size={13} /> Update Registry Card
+                          </button>
+                        )}
+                      </div>
                     </div>
+
+                    {currentCase.familyCode && (
+                      <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-3 flex justify-between items-center text-xs text-emerald-950 font-medium shrink-0">
+                        <div className="flex items-center gap-2">
+                          <Users size={16} className="text-emerald-700 shrink-0" />
+                          <span>Active Family Code: <strong className="font-mono text-sm tracking-wider text-emerald-900">{currentCase.familyCode}</strong></span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(currentCase.familyCode);
+                            triggerNotification("Family Code copied to clipboard!");
+                          }}
+                          className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider cursor-pointer"
+                        >
+                          Copy Code
+                        </button>
+                      </div>
+                    )}
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
