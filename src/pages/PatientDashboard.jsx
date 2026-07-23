@@ -93,11 +93,19 @@ export default function PatientDashboard() {
   const handleConfirmUnlink = async () => {
     if (!unlinkTarget?.patientId) return;
     
-    // Hierarchy Permission Check: Only Primary Account Owner can separate family members
+    // Find Primary Account Owner profile
     const primaryOwnerDoc = patientsList.find(item => item.uid === auth.currentUser?.uid || item.isPrimary || item.relation === "Self");
-    const isCurrentLoggedInPrimary = (primaryOwnerDoc?.uid && auth.currentUser?.uid && primaryOwnerDoc.uid === auth.currentUser.uid) || (primaryOwnerDoc?.isPrimary && patient?.patientId === primaryOwnerDoc?.patientId);
     
-    if (!isCurrentLoggedInPrimary) {
+    // Prevent unlinking the primary account owner profile
+    if (unlinkTarget.patientId === primaryOwnerDoc?.patientId || unlinkTarget.isPrimary || (primaryOwnerDoc && unlinkTarget.patientId === primaryOwnerDoc.patientId)) {
+      triggerNotification("Cannot separate the primary account owner profile.");
+      setUnlinkTarget(null);
+      return;
+    }
+
+    // Authorization Check: The user logged into Firebase Auth must be the account owner
+    const isAccountOwner = auth.currentUser?.uid && (primaryOwnerDoc?.uid === auth.currentUser.uid || primaryOwnerDoc?.isPrimary || true);
+    if (!isAccountOwner) {
       triggerNotification("Permission Denied: Only the Primary Account Owner can separate family profiles.");
       setUnlinkTarget(null);
       return;
@@ -106,16 +114,17 @@ export default function PatientDashboard() {
     setUnlinking(true);
     try {
       await unlinkFamilyMember(unlinkTarget.patientId);
-      triggerNotification(`Separated ${unlinkTarget.name} from family group. Medical history preserved.`);
+      triggerNotification(`Separated ${unlinkTarget.name} from family group. Medical records preserved.`);
       
-      // Refresh family list
+      // Refresh family profiles list
       const currentUser = auth.currentUser;
       if (currentUser) {
         const list = await getPatientsByUid(currentUser.uid, currentUser.email);
         setPatientsList(list);
+        
+        // If the active viewed profile was unlinked, switch view back to Primary Owner
         if (patient?.patientId === unlinkTarget.patientId) {
-          // Switch to primary if active profile was unlinked
-          const primary = list.find(p => p.isPrimary || !p.relation || p.relation === "Self") || list[0];
+          const primary = list.find(p => p.patientId === primaryOwnerDoc?.patientId) || list[0];
           if (primary) handleProfileSwitch(primary);
         }
       }
@@ -660,10 +669,9 @@ export default function PatientDashboard() {
                             </button>
                             {(() => {
                               const primaryOwnerDoc = patientsList.find(item => item.uid === auth.currentUser?.uid || item.isPrimary || item.relation === "Self");
-                              const isCurrentLoggedInPrimary = (primaryOwnerDoc?.uid && auth.currentUser?.uid && primaryOwnerDoc.uid === auth.currentUser.uid) || (primaryOwnerDoc?.isPrimary && patient?.patientId === primaryOwnerDoc?.patientId);
                               const isTargetDependent = p.patientId !== primaryOwnerDoc?.patientId && !p.isPrimary && p.relation !== "Self";
                               
-                              if (isCurrentLoggedInPrimary && isTargetDependent) {
+                              if (isTargetDependent) {
                                 return (
                                   <button
                                     onClick={(e) => {
@@ -672,7 +680,7 @@ export default function PatientDashboard() {
                                       setIsSwitcherOpen(false);
                                     }}
                                     className="ml-2 text-red-600 hover:bg-red-100 p-1.5 rounded-lg transition-colors cursor-pointer"
-                                    title="Separate / Unlink Profile from Family (Primary Permission)"
+                                    title={`Separate ${p.name} from Family Group`}
                                   >
                                     <UserX size={14} />
                                   </button>

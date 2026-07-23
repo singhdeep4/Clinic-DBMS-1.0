@@ -335,11 +335,12 @@ export async function unlinkFamilyMember(memberPatientId) {
 
     const newSoloFamilyId = "FAMID-" + memberPatientId.replace("PAT-", "") + "-SOLO-" + Math.floor(Math.random() * 1000);
 
-    // Update patient record: set new standalone familyId and set relation to Self
+    // Update patient record: set new standalone familyId, set relation to Self, and clear parent UID link
     await updateDoc(memberRef, {
       familyId: newSoloFamilyId,
       relation: "Self",
       isPrimary: true,
+      uid: "",
       unlinkedAt: new Date().toISOString()
     });
 
