@@ -322,3 +322,30 @@ export async function linkPatientByFamilyCode(enteredCode, uid, relation) {
     throw err;
   }
 }
+
+// Unlink a family member into an independent standalone profile (Preserves all medical data)
+export async function unlinkFamilyMember(memberPatientId) {
+  if (!memberPatientId) return false;
+  try {
+    const memberRef = doc(fdb, "patients", memberPatientId);
+    const snap = await getDoc(memberRef);
+    if (!snap.exists()) {
+      throw new Error("Patient profile not found.");
+    }
+
+    const newSoloFamilyId = "FAMID-" + memberPatientId.replace("PAT-", "") + "-SOLO-" + Math.floor(Math.random() * 1000);
+
+    // Update patient record: set new standalone familyId and set relation to Self
+    await updateDoc(memberRef, {
+      familyId: newSoloFamilyId,
+      relation: "Self",
+      isPrimary: true,
+      unlinkedAt: new Date().toISOString()
+    });
+
+    return true;
+  } catch (err) {
+    console.error("Error unlinking family member:", err);
+    throw err;
+  }
+}

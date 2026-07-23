@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../lib/firebase";
-import { getPatientsByUid, getPatientWithVisits, linkFamilyMemberToUid, linkPatientByFamilyCode, getRotatingHash } from "../lib/patientService";
+import { getPatientsByUid, getPatientWithVisits, linkFamilyMemberToUid, linkPatientByFamilyCode, getRotatingHash, unlinkFamilyMember } from "../lib/patientService";
 import { getAllItems, putItem } from "../lib/db";
 import { 
   User, Calendar, Shield, LogOut, FileText, ClipboardList, CheckCircle, 
   AlertCircle, Activity, Heart, Clock, Printer, MapPin, Phone, UserPlus, X, ChevronDown, Sparkles,
-  Mail, MessageCircle, Send, ArrowLeft
+  Mail, MessageCircle, Send, ArrowLeft, UserX, Trash2
 } from "lucide-react";
 import SEO from "../components/SEO";
 import { 
@@ -85,6 +85,37 @@ export default function PatientDashboard() {
   const [contactError, setContactError] = useState("");
   const [contactSuccess, setContactSuccess] = useState("");
   const [contactSubmitting, setContactSubmitting] = useState(false);
+
+  // Unlink Family Member Modal States
+  const [unlinkTarget, setUnlinkTarget] = useState(null);
+  const [unlinking, setUnlinking] = useState(false);
+
+  const handleConfirmUnlink = async () => {
+    if (!unlinkTarget?.patientId) return;
+    setUnlinking(true);
+    try {
+      await unlinkFamilyMember(unlinkTarget.patientId);
+      triggerNotification(`Separated ${unlinkTarget.name} from family group. Medical history preserved.`);
+      
+      // Refresh family list
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        const list = await getPatientsByUid(currentUser.uid, currentUser.email);
+        setPatientsList(list);
+        if (patient?.patientId === unlinkTarget.patientId) {
+          // Switch to primary if active profile was unlinked
+          const primary = list.find(p => p.isPrimary || !p.relation || p.relation === "Self") || list[0];
+          if (primary) handleProfileSwitch(primary);
+        }
+      }
+      setUnlinkTarget(null);
+    } catch (err) {
+      console.error("Error unlinking member:", err);
+      triggerNotification("Failed to unlink family member: " + err.message);
+    } finally {
+      setUnlinking(false);
+    }
+  };
 
   // Chat & Prescription History States
   const [showChatModal, setShowChatModal] = useState(false);
@@ -593,20 +624,43 @@ export default function PatientDashboard() {
                       <ChevronDown size={12} />
                     </button>
                     {isSwitcherOpen && (
-                      <div className="absolute left-0 mt-1.5 w-48 bg-brand-cream border border-brand-light/75 text-brand-primary rounded-xl shadow-xl py-1.5 z-50">
+                      <div className="absolute left-0 mt-1.5 w-64 bg-brand-cream border border-brand-light/75 text-brand-primary rounded-xl shadow-xl py-1.5 z-50">
+                        <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-secondary border-b border-brand-light/50 mb-1">
+                          Family Profiles
+                        </div>
                         {patientsList.map((p) => (
-                          <button
+                          <div
                             key={p.patientId}
-                            onClick={() => handleProfileSwitch(p)}
-                            className={`w-full text-left px-4 py-2 text-xs font-semibold hover:bg-brand-light transition-colors flex justify-between items-center ${
+                            className={`px-3 py-2 text-xs font-semibold hover:bg-brand-light transition-colors flex justify-between items-center ${
                               p.patientId === patient?.patientId ? "bg-brand-light/35 font-bold" : ""
                             }`}
                           >
-                            <span>{p.name}</span>
-                            <span className="text-[9px] opacity-70 bg-brand-primary/10 px-1.5 py-0.5 rounded">
-                              {p.relation || "Self"}
-                            </span>
-                          </button>
+                            <button
+                              onClick={() => {
+                                handleProfileSwitch(p);
+                                setIsSwitcherOpen(false);
+                              }}
+                              className="flex-grow text-left flex items-center justify-between gap-2 cursor-pointer"
+                            >
+                              <span className="truncate max-w-[130px]">{p.name}</span>
+                              <span className="text-[9px] opacity-70 bg-brand-primary/10 px-1.5 py-0.5 rounded">
+                                {p.relation || "Self"}
+                              </span>
+                            </button>
+                            {(!p.isPrimary && p.relation !== "Self") && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setUnlinkTarget(p);
+                                  setIsSwitcherOpen(false);
+                                }}
+                                className="ml-2 text-red-600 hover:bg-red-100 p-1 rounded transition-colors cursor-pointer"
+                                title="Separate / Unlink Profile from Family"
+                              >
+                                <UserX size={13} />
+                              </button>
+                            )}
+                          </div>
                         ))}
                       </div>
                     )}
@@ -1780,6 +1834,53 @@ export default function PatientDashboard() {
                 </button>
               </form>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── UNLINK FAMILY MEMBER CONFIRMATION MODAL ─── */}
+      {unlinkTarget && (
+        <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 print:hidden">
+          <div className="bg-brand-cream border border-brand-light/75 max-w-md w-full rounded-3xl p-6 shadow-2xl space-y-4 animate-scaleUp">
+            <div className="flex items-center gap-3 text-red-800 border-b border-brand-light/50 pb-3">
+              <UserX size={24} className="text-red-600" />
+              <div>
+                <h3 className="font-serif text-lg font-bold text-brand-primary">Separate Family Profile</h3>
+                <p className="text-[10px] text-brand-dark/60 font-medium">Remove member from family group</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-brand-dark/80 leading-relaxed">
+              Are you sure you want to separate <strong>{unlinkTarget.name}</strong> ({unlinkTarget.relation || "Family Member"}) from this family group?
+            </p>
+
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl p-3 text-[11px] space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <span>✓</span> Medical Data Safety Guaranteed
+              </p>
+              <p className="text-[10px] opacity-90">
+                All past visit records, lab reports, and prescriptions will remain 100% saved in the clinic database under Patient ID <strong>{unlinkTarget.patientId}</strong>.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setUnlinkTarget(null)}
+                disabled={unlinking}
+                className="flex-1 bg-white border border-brand-light/60 text-brand-primary py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-brand-beige transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmUnlink}
+                disabled={unlinking}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                {unlinking ? "Separating..." : "Confirm Separation"}
+              </button>
             </div>
           </div>
         </div>
